@@ -1,22 +1,52 @@
 // applyBindings()는 common.js에 정의되어 있다 (헤더/푸터 포함 전체 페이지 공통)
 
-// 구글드라이브 최근 사진을 최신순 그리드로 불러온다 (Netlify Function 경유)
-function loadPhotoGrid(containerId) {
-  const grid = document.getElementById(containerId);
-  if (!grid) return;
+function formatDate(iso) {
+  if (!iso) return '';
+  return iso.slice(0, 10);
+}
+
+// 구글드라이브 대표 사진 + 카테고리별 최근 사진을 불러와 카드로 그린다 (Netlify Function 경유)
+function loadGallery(featuredId, catGridId) {
+  const featuredEl = document.getElementById(featuredId);
+  const catGridEl = document.getElementById(catGridId);
+  if (!featuredEl || !catGridEl) return;
+
   fetch('/.netlify/functions/drive-photos')
     .then(res => res.json())
     .then(data => {
-      if (data.error || !data.photos || data.photos.length === 0) {
-        grid.innerHTML = '<p class="photo-grid-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
+      if (data.error || !data.featured) {
+        featuredEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
+        catGridEl.innerHTML = '';
         return;
       }
-      grid.innerHTML = data.photos.map(p =>
-        `<a href="${p.link}" target="_blank" rel="noopener" title="${p.name}"><img src="${p.thumb}" alt="${p.name}" loading="lazy"></a>`
-      ).join('');
+
+      const f = data.featured;
+      featuredEl.innerHTML = `
+        <div class="gallery-featured-card">
+          <div class="gallery-featured-img">
+            <span class="gallery-featured-badge">NEW FEATURED PHOTO</span>
+            <img src="${f.thumb}" alt="${f.name}" loading="lazy">
+          </div>
+          <div class="gallery-featured-info">
+            <p class="gallery-featured-cat">${f.category}</p>
+            <p class="gallery-featured-title">${f.event}</p>
+            <p class="gallery-featured-date">${formatDate(f.createdTime)} 업데이트</p>
+            <a href="${f.link}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="width:fit-content;">앨범 사진첩 전체보기 →</a>
+          </div>
+        </div>`;
+
+      catGridEl.innerHTML = (data.categories || []).map(c => `
+        <a href="${c.photo.link}" target="_blank" rel="noopener" class="gallery-cat-card">
+          <div class="gallery-cat-thumb"><img src="${c.photo.thumb}" alt="${c.name}" loading="lazy"></div>
+          <div>
+            <p class="gallery-cat-label">행사 사진첩</p>
+            <p class="gallery-cat-name">${c.name}</p>
+            <p class="gallery-cat-date">최근 업데이트 · ${formatDate(c.photo.createdTime)}</p>
+          </div>
+        </a>`).join('');
     })
     .catch(() => {
-      grid.innerHTML = '<p class="photo-grid-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
+      featuredEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
     });
 }
 
@@ -59,21 +89,8 @@ fetch('/content/site.json')
     iframe.src = `https://www.youtube.com/embed/videoseries?list=${data.sermon.youtube_playlist_id}`;
     document.getElementById('sermon-channel-link').href = data.sermon.youtube_channel_url;
 
-    // 갤러리 최근 사진 (최신순 그리드)
-    loadPhotoGrid('photo-grid');
-
-    // 갤러리 (구글드라이브 폴더 링크 — 전체보기용)
-    const galleryList = document.getElementById('gallery-list');
-    galleryList.innerHTML = '';
-    if (data.gallery && data.gallery.length > 0) {
-      data.gallery.forEach(item => {
-        const li = document.createElement('li');
-        li.innerHTML = `<a href="${item.drive_url}" target="_blank" rel="noopener">📁 ${item.title} 전체보기</a>`;
-        galleryList.appendChild(li);
-      });
-    } else {
-      galleryList.innerHTML = '<li class="gallery-empty">등록된 자료가 아직 없습니다.</li>';
-    }
+    // 갤러리: 대표 사진 + 카테고리별 최근 사진
+    loadGallery('gallery-featured', 'gallery-cat-grid');
 
     // 메인 배경 사진 슬라이드 (15초마다 자동 전환)
     initHeroSlides(data.hero.images);

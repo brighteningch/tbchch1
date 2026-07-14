@@ -1,9 +1,8 @@
-// 홈페이지 갤러리 폴더 안의 최근 사진들을 최신순으로 가져온다.
-// 실제 폴더 구조: 최상위 폴더 → 카테고리 폴더(교회학교/예배사진/청소년&청년/행사사진) → 날짜별 행사 폴더 → 사진 파일
+// 홈페이지 갤러리: 최신 대표 사진 1장 + 카테고리별(교회학교/예배사진/청소년&청년/행사사진) 최근 사진 1장씩을 가져온다.
+// 실제 폴더 구조: 최상위 폴더 → 카테고리 폴더 → 날짜별 행사 폴더 → 사진 파일
 // API 키는 절대 코드에 넣지 않고 Netlify 환경변수(GOOGLE_DRIVE_API_KEY)로만 읽는다.
 const PARENT_FOLDER_ID = "1tbcejmqyzPM94zowqFwv12ZYml3LMRkU";
-const MAX_PHOTOS = 16;
-const MAX_RECENT_EVENT_FOLDERS = 8;
+const MAX_RECENT_EVENT_FOLDERS_PER_CATEGORY = 4;
 
 async function driveList(query, apiKey, fields) {
   const url = `https://www.googleapis.com/drive/v3/files?${new URLSearchParams({
@@ -24,6 +23,17 @@ function isFolder(f) {
 function isImage(f) {
   return f.mimeType && f.mimeType.startsWith("image/");
 }
+function toPhoto(p, category, eventName) {
+  return {
+    id: p.id,
+    name: p.name,
+    thumb: p.thumbnailLink ? p.thumbnailLink.replace(/=s\d+$/, "=s800") : null,
+    link: p.webViewLink,
+    createdTime: p.createdTime,
+    category,
+    event: eventName || category,
+  };
+}
 
 exports.handler = async function () {
   const apiKey = process.env.GOOGLE_DRIVE_API_KEY;
@@ -34,42 +44,46 @@ exports.handler = async function () {
   try {
     const fields = "files(id,name,mimeType,thumbnailLink,webViewLink,createdTime)";
 
-    // 1) 최상위 폴더 바로 아래 항목 (카테고리 폴더들 + 혹시 있을 직속 이미지)
+    // 1) 카테고리 폴더 목록
     const level1 = await driveList(`'${PARENT_FOLDER_ID}' in parents and trashed = false`, apiKey, fields);
     const categoryFolders = level1.filter(isFolder);
-    let pool = level1.filter(isImage);
 
-    // 2) 각 카테고리 폴더 아래 항목 (날짜별 행사 폴더들 + 혹시 있을 직속 이미지)
-    const level2Lists = await Promise.all(
-      categoryFolders.map(f => driveList(`'${f.id}' in parents and trashed = false`, apiKey, fields))
-    );
-    const level2 = level2Lists.flat();
-    pool = pool.concat(level2.filter(isImage));
-    const eventFolders = level2.filter(isFolder);
+    let allPhotos = [];
+    const byCategory = {};
 
-    // 3) 최근 생성된 행사 폴더 위주로만 실제 사진을 가져온다 (전체를 다 훑지 않음)
-    eventFolders.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
-    const recentEventFolders = eventFolders.slice(0, MAX_RECENT_EVENT_FOLDERS);
+    for (const cat of categoryFolders) {
+      const catChildren = await driveList(`'${cat.id}' in parents and trashed = false`, apiKey, fields);
+      const directImages = catChildren.filter(isImage).map(p => toPhoto(p, cat.name, cat.name));
+      const eventFolders = catChildren.filter(isFolder).sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+      const recentEvents = eventFolders.slice(0, MAX_RECENT_EVENT_FOLDERS_PER_CATEGORY);
 
-    const level3Lists = await Promise.all(
-      recentEventFolders.map(f => driveList(`'${f.id}' in parents and trashed = false`, apiKey, fields))
-    );
-    pool = pool.concat(level3Lists.flat().filter(isImage));
+      const eventPhotoLists = await Promise.all(
+        recentEvents.map(async ev => {
+          const files = await driveList(`'${ev.id}' in parents and trashed = false`, apiKey, fields);
+          return files.filter(isImage).map(p => toPhoto(p, cat.name, ev.name));
+        })
+      );
 
-    pool.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+      const catPhotos = directImages.concat(eventPhotoLists.flat());
+      catPhotos.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
 
-    const result = pool.slice(0, MAX_PHOTOS).map(p => ({
-      id: p.id,
-      name: p.name,
-      thumb: p.thumbnailLink ? p.thumbnailLink.replace(/=s\d+$/, "=s600") : null,
-      link: p.webViewLink,
-      createdTime: p.createdTime,
-    }));
+      if (catPhotos.length > 0) {
+        byCategory[cat.name] = catPhotos[0];
+      }
+      allPhotos = allPhotos.concat(catPhotos);
+    }
+
+    allPhotos.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+    const featured = allPhotos[0] || null;
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
-      body: JSON.stringify({ photos: result }),
+      body: JSON.stringify({
+        featured,
+        categories: Object.entries(byCategory).map(([name, photo]) => ({ name, photo })),
+        driveFolderUrl: `https://drive.google.com/drive/folders/${PARENT_FOLDER_ID}`,
+      }),
     };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: String(err) }) };
