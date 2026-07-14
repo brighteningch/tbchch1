@@ -1,5 +1,13 @@
 // applyBindings()는 common.js에 정의되어 있다 (헤더/푸터 포함 전체 페이지 공통)
 
+// 구글드라이브 폴더 링크에서 미리보기 임베드 HTML을 만든다 (공개 폴더만 보임)
+function driveEmbedHtml(driveUrl) {
+  const m = driveUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (!m) return '';
+  const folderId = m[1];
+  return `<div class="drive-embed-wrap"><iframe src="https://drive.google.com/embeddedfolderview?id=${folderId}#grid" loading="lazy"></iframe></div>`;
+}
+
 function renderParagraphs(container, text) {
   container.innerHTML = '';
   text.split('\n\n').forEach(block => {
@@ -45,7 +53,7 @@ fetch('/content/site.json')
     if (data.gallery && data.gallery.length > 0) {
       data.gallery.forEach(item => {
         const li = document.createElement('li');
-        li.innerHTML = `<a href="${item.drive_url}" target="_blank" rel="noopener">📁 ${item.title}</a>`;
+        li.innerHTML = `<a href="${item.drive_url}" target="_blank" rel="noopener">📁 ${item.title}</a>` + driveEmbedHtml(item.drive_url);
         galleryList.appendChild(li);
       });
     } else {

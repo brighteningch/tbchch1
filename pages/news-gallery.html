@@ -26,6 +26,11 @@
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 <script src="/common.js"></script>
 <script>
+function driveEmbedHtml(driveUrl) {
+  const m = driveUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (!m) return '';
+  return `<div class="drive-embed-wrap"><iframe src="https://drive.google.com/embeddedfolderview?id=${m[1]}#grid" loading="lazy"></iframe></div>`;
+}
 document.addEventListener('sitedata:loaded', (e) => {
   const data = e.detail;
   const list = document.getElementById('gallery-list-page');
@@ -33,7 +38,7 @@ document.addEventListener('sitedata:loaded', (e) => {
   if (data.gallery && data.gallery.length > 0) {
     data.gallery.forEach(item => {
       const li = document.createElement('li');
-      li.innerHTML = `<a href="${item.drive_url}" target="_blank" rel="noopener">📁 ${item.title}</a>`;
+      li.innerHTML = `<a href="${item.drive_url}" target="_blank" rel="noopener">📁 ${item.title}</a>` + driveEmbedHtml(item.drive_url);
       list.appendChild(li);
     });
   } else {
