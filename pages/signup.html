@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회원가입 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>✦</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">SIGN UP</span>
+  <h1>회원가입</h1>
+  <p>빛나는교회 성도님들을 위한 간단한 회원가입입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:420px;">
+  <form id="signupForm" class="auth-form">
+    <label>이름
+      <input type="text" id="suName" required>
+    </label>
+    <label>아이디
+      <input type="text" id="suUsername" required pattern="[a-z0-9_]{3,20}" title="영문 소문자, 숫자, _ 3~20자">
+    </label>
+    <label>비밀번호
+      <input type="password" id="suPassword" required minlength="6" autocomplete="new-password">
+    </label>
+    <label>연락처
+      <input type="tel" id="suPhone" required placeholder="010-0000-0000">
+    </label>
+    <label>직분
+      <input type="text" id="suPosition" required placeholder="예: 집사, 권사, 성도, 청년">
+    </label>
+    <p class="auth-error" id="signupError" hidden></p>
+    <button type="submit" class="btn btn-primary" style="width:100%;">회원가입</button>
+  </form>
+  <p class="auth-switch">이미 계정이 있으신가요? <a href="/pages/login.html">로그인</a></p>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/common.js"></script>
+<script>
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('signupError');
+  errorEl.hidden = true;
+
+  const name = document.getElementById('suName').value;
+  const username = document.getElementById('suUsername').value.trim().toLowerCase();
+  const password = document.getElementById('suPassword').value;
+  const phone = document.getElementById('suPhone').value;
+  const position = document.getElementById('suPosition').value;
+
+  try {
+    const available = await checkUsernameAvailable(username);
+    if (!available) {
+      errorEl.textContent = '이미 사용 중인 아이디입니다.';
+      errorEl.hidden = false;
+      return;
+    }
+    await memberSignUp({ name, username, password, phone, position });
+    alert('회원가입이 완료됐습니다. 로그인해주세요.');
+    location.href = '/pages/login.html';
+  } catch (err) {
+    errorEl.textContent = '회원가입 중 오류가 발생했습니다: ' + (err.message || err);
+    errorEl.hidden = false;
+  }
+});
+</script>
+</body>
+</html>

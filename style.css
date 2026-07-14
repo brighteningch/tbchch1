@@ -1,14 +1,15 @@
 :root {
-  --navy: #0f3b64;
-  --navy-dark: #0a2745;
-  --green: #659b41;
-  --coral: #e6856c;
-  --bg-warm: #faf7f2;
-  --bg-cool: #f8fafc;
+  --navy: #2d3652;
+  --navy-dark: #082e5d;
+  --hero-grad-top: #1f4471;
+  --green: #6c96c5;
+  --coral: #6c96c5;
+  --bg-warm: #eaf1fb;
+  --bg-cool: #eaf1fb;
   --bg-card: #ffffff;
-  --text-dark: #16232e;
+  --text-dark: #1c2536;
   --text-gray: #5b6b78;
-  --border-light: #e5e9ee;
+  --border-light: #e2e9f3;
   --font-body: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
   --max-width: 1120px;
 }
@@ -227,18 +228,43 @@ body {
 .mm-panel a:hover { background: var(--bg-cool); color: var(--navy); }
 
 .header-right { display: flex; align-items: center; gap: 14px; }
-.auth-area { display: flex; align-items: center; gap: 10px; }
-.auth-link {
+.member-auth-area { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.member-auth-area a { color: var(--navy); text-decoration: none; font-weight: 600; }
+.member-auth-area a:hover { text-decoration: underline; }
+.member-auth-sep { color: var(--border-light); }
+.member-auth-logged { position: relative; }
+.member-auth-name {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-body); color: var(--navy);
+  font-size: 13.5px; font-weight: 700;
+}
+.member-auth-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%; right: 0;
+  margin-top: 8px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(15,40,70,0.15);
+  min-width: 140px;
+  padding: 8px 0;
+  z-index: 60;
+}
+.member-auth-dropdown.open { display: block; }
+.member-auth-dropdown a, .member-auth-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 16px;
   background: none;
   border: none;
   cursor: pointer;
   font-family: var(--font-body);
-  color: var(--navy);
   font-size: 13.5px;
-  font-weight: 600;
-  text-decoration: underline;
+  color: var(--text-dark);
+  text-decoration: none;
 }
-.auth-name { font-size: 13.5px; color: var(--text-gray); }
+.member-auth-dropdown a:hover, .member-auth-dropdown button:hover { background: var(--bg-cool); }
 
 /* ---------- Sub-page hero ---------- */
 .page-hero {
@@ -558,3 +584,32 @@ section { padding: 88px 0; }
   section { padding: 56px 0; }
   .worship-table th, .worship-table td { padding: 12px 14px; font-size: 13.5px; }
 }
+
+/* ---------- 로그인/회원가입 폼 ---------- */
+.auth-form { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+.auth-form label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13.5px; font-weight: 600; color: var(--text-dark);
+}
+.auth-form input {
+  font-family: var(--font-body);
+  font-size: 15px;
+  padding: 11px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  outline: none;
+}
+.auth-form input:focus { border-color: var(--navy); }
+.auth-error { color: #c0392b; font-size: 13.5px; }
+.auth-switch { text-align: center; font-size: 13.5px; color: var(--text-gray); }
+.auth-switch a { color: var(--navy); font-weight: 600; }
+
+/* ---------- 관리자 회원관리 테이블 ---------- */
+.member-table-wrap { background: #fff; border-radius: 16px; overflow-x: auto; box-shadow: 0 10px 30px rgba(15,40,70,0.06); }
+.member-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.member-table thead { background: var(--navy); color: #fff; }
+.member-table th { text-align: left; padding: 14px 18px; font-size: 13px; }
+.member-table td { padding: 12px 18px; border-bottom: 1px solid var(--border-light); font-size: 14px; }
+.member-table tr:nth-child(even) { background: var(--bg-cool); }
+.admin-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.admin-guard { text-align: center; padding: 60px 20px; color: var(--text-gray); }

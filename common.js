@@ -36,27 +36,6 @@ function initMobileNav() {
   });
 }
 
-function initAuth() {
-  const authArea = document.getElementById('authArea');
-  if (!authArea || !window.netlifyIdentity) return;
-
-  function render(user) {
-    if (user) {
-      const name = (user.user_metadata && user.user_metadata.full_name) || user.email;
-      authArea.innerHTML = `<span class="auth-name">${name}님</span><button class="auth-link" id="logoutBtn">로그아웃</button>`;
-      document.getElementById('logoutBtn').addEventListener('click', () => netlifyIdentity.logout());
-    } else {
-      authArea.innerHTML = `<button class="auth-link" id="loginBtn">관리자 로그인</button>`;
-      document.getElementById('loginBtn').addEventListener('click', () => netlifyIdentity.open());
-    }
-  }
-
-  netlifyIdentity.on('init', render);
-  netlifyIdentity.on('login', render);
-  netlifyIdentity.on('logout', () => render(null));
-  netlifyIdentity.init();
-}
-
 function loadSiteData(callback) {
   fetch('/content/site.json')
     .then(res => res.json())
@@ -95,7 +74,7 @@ function injectPartials(callback) {
     if (footerHost) footerHost.innerHTML = footerHtml;
     initMegaMenu();
     initMobileNav();
-    initAuth();
+    if (window.renderMemberAuthArea) renderMemberAuthArea();
     if (callback) callback();
   });
 }

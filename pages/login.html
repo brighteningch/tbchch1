@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로그인 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>✦</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">LOGIN</span>
+  <h1>로그인</h1>
+  <p>아이디와 비밀번호로 로그인해주세요.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:420px;">
+  <form id="loginForm" class="auth-form">
+    <label>아이디
+      <input type="text" id="loginUsername" required autocomplete="username">
+    </label>
+    <label>비밀번호
+      <input type="password" id="loginPassword" required autocomplete="current-password">
+    </label>
+    <p class="auth-error" id="loginError" hidden></p>
+    <button type="submit" class="btn btn-primary" style="width:100%;">로그인</button>
+  </form>
+  <p class="auth-switch">아직 계정이 없으신가요? <a href="/pages/signup.html">회원가입</a></p>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/common.js"></script>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('loginError');
+  errorEl.hidden = true;
+  const username = document.getElementById('loginUsername').value;
+  const password = document.getElementById('loginPassword').value;
+  try {
+    await memberSignIn({ username, password });
+    location.href = '/';
+  } catch (err) {
+    errorEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+    errorEl.hidden = false;
+  }
+});
+</script>
+</body>
+</html>

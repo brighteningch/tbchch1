@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회원 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>✦</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">ADMIN</span>
+  <h1>회원 관리</h1>
+  <p>가입한 성도님들의 명단을 확인하고 관리합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="adminGuard" class="admin-guard" hidden>
+    <p>관리자만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="adminContent" hidden>
+    <div class="admin-toolbar">
+      <p id="memberCount" style="font-weight:700;"></p>
+      <button id="exportCsvBtn" class="btn btn-ghost btn-sm">엑셀(CSV)로 다운로드</button>
+    </div>
+    <div class="member-table-wrap">
+      <table class="member-table">
+        <thead>
+          <tr><th>이름</th><th>아이디</th><th>연락처</th><th>직분</th><th>가입일</th><th>관리자</th></tr>
+        </thead>
+        <tbody id="memberTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/common.js"></script>
+<script>
+let __members = [];
+
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function renderMembers(members) {
+  __members = members;
+  document.getElementById('memberCount').textContent = `전체 회원 ${members.length}명`;
+  document.getElementById('memberTbody').innerHTML = members.map(m => `
+    <tr>
+      <td>${esc(m.name)}</td>
+      <td>${esc(m.username)}</td>
+      <td>${esc(m.phone)}</td>
+      <td>${esc(m.position)}</td>
+      <td>${(m.created_at || '').slice(0,10)}</td>
+      <td>${m.is_admin ? '✓' : ''}</td>
+    </tr>`).join('');
+}
+
+function downloadCsv() {
+  const header = ['이름','아이디','연락처','직분','가입일'];
+  const rows = __members.map(m => [m.name, m.username, m.phone, m.position, (m.created_at||'').slice(0,10)]);
+  const csv = [header, ...rows].map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(["﻿" + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `빛나는교회_회원목록_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function initAdminPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_admin) {
+    document.getElementById('adminGuard').hidden = false;
+    return;
+  }
+  document.getElementById('adminContent').hidden = false;
+  const sb = getSupabaseClient();
+  const { data, error } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
+  if (error) {
+    document.getElementById('memberCount').textContent = '회원 목록을 불러오지 못했습니다.';
+    return;
+  }
+  renderMembers(data);
+  document.getElementById('exportCsvBtn').addEventListener('click', downloadCsv);
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminPage, 400));
+</script>
+</body>
+</html>
