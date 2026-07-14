@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인사말 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">WELCOME</span>
+  <h1>인사말</h1>
+  <p>빛나는교회 목사님의 인사 말씀입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" id="greeting-body"></div>
+
+<div id="footerHost"></div>
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script src="/common.js"></script>
+<script>
+document.addEventListener('sitedata:loaded', (e) => {
+  const data = e.detail;
+  const el = document.getElementById('greeting-body');
+  const paras = data.about.message.split('\n\n').filter(b => b.trim());
+  el.innerHTML = paras.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('')
+    + `<p style="font-weight:700;color:var(--navy);margin-top:20px;">${data.about.highlight}</p>`
+    + `<p style="color:var(--text-gray);font-size:14px;">${data.about.signature}</p>`;
+});
+</script>
+</body>
+</html>

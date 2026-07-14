@@ -21,6 +21,9 @@ collections:
               - { label: "표어 첫줄", name: "verse_line1", widget: string }
               - { label: "표어 둘째줄", name: "verse_line2", widget: string }
               - { label: "성경구절 출처", name: "reference", widget: string }
+              - { label: "메인 배경 사진 (15초마다 자동 전환, 16:9 비율 권장)", name: "images", widget: list, required: false, fields:
+                  - { label: "사진", name: "image", widget: image }
+                }
             }
           - { label: "교회소개", name: "about", widget: object, fields:
               - { label: "정식 교단/교회명", name: "lead", widget: string }
@@ -57,6 +60,11 @@ collections:
               - { label: "이메일", name: "email", widget: string }
               - { label: "주소", name: "address", widget: string }
               - { label: "버스 안내", name: "bus", widget: string }
+              - { label: "인스타그램 주소 (없으면 비워두면 메뉴에서 숨겨집니다)", name: "instagram_url", widget: string, required: false }
+            }
+          - { label: "핵심가치", name: "core_values", widget: list, required: false, fields:
+              - { label: "제목", name: "title", widget: string }
+              - { label: "설명", name: "description", widget: text }
             }
 
   - name: "notices"

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>묵상과 삶(소그룹) · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">COMMUNITY & 양육</span>
+  <h1>묵상과 삶(소그룹)</h1>
+  <p>소그룹 모임 안내입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body">
+  <p>빛나는교회는 삶의 자리에서 말씀을 묵상하고 나누는 소그룹(가정교회) 공동체를 지향합니다. 담임목사님은 매일의 본문 묵상을 <strong>티스토리 블로그</strong>에 꾸준히 나누고 계시며, 소그룹은 이 나눔을 함께 읽고 삶으로 적용하는 자리입니다.</p>
+  <h3 style="color:var(--navy);margin:24px 0 14px;">목사님 묵상 나눔 (최신 글)</h3>
+  <ul class="notice-list" id="tistory-list">
+    <li class="gallery-empty">불러오는 중...</li>
+  </ul>
+  <div style="text-align:center;margin-top:20px;">
+    <a href="https://eshallom.tistory.com/" target="_blank" rel="noopener" class="btn btn-ghost">블로그 전체 보기 ↗</a>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script src="/common.js"></script>
+<script>
+fetch('/.netlify/functions/tistory-feed')
+  .then(res => res.json())
+  .then(data => {
+    const list = document.getElementById('tistory-list');
+    list.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+      list.innerHTML = '<li class="gallery-empty">글을 불러오지 못했습니다. 위 블로그 링크에서 확인해주세요.</li>';
+      return;
+    }
+    data.items.forEach(item => {
+      const li = document.createElement('li');
+      const date = item.pubDate ? item.pubDate.slice(0, 16) : '';
+      li.innerHTML = `<span class="notice-date">${date}</span><span class="notice-title"><a href="${item.link}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${item.title}</a></span>`;
+      list.appendChild(li);
+    });
+  })
+  .catch(() => {
+    document.getElementById('tistory-list').innerHTML = '<li class="gallery-empty">글을 불러오지 못했습니다. 위 블로그 링크에서 확인해주세요.</li>';
+  });
+</script>
+</body>
+</html>

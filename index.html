@@ -25,25 +25,11 @@
   </div>
 </div>
 
-<header class="site-header" id="top">
-  <div class="header-inner">
-    <a href="#top" class="logo"><span class="logo-mark">✦</span>빛나는교회</a>
-    <nav class="nav" id="nav">
-      <a href="#about">교회소개</a>
-      <a href="#worship">예배안내</a>
-      <a href="#sermon">설교</a>
-      <a href="#gallery">갤러리</a>
-      <a href="#notice">공지사항</a>
-      <a href="#visit">오시는길</a>
-    </nav>
-    <a href="#offering" class="btn btn-primary btn-sm">온라인헌금</a>
-    <button class="nav-toggle" id="navToggle" aria-label="메뉴 열기">
-      <span></span><span></span><span></span>
-    </button>
-  </div>
-</header>
+<div id="headerHost"></div>
 
 <section class="hero">
+  <div class="hero-slides" id="heroSlides"></div>
+  <div class="hero-overlay"></div>
   <div class="hero-inner">
     <p class="hero-eyebrow" data-bind="hero.pretitle">하나님의 말씀을 <span class="accent" data-bind="hero.pretitle_accent">곱씹다</span></p>
     <h1 class="hero-title">빛나는교회</h1>
@@ -175,28 +161,10 @@
   </div>
 </section>
 
-<footer class="site-footer">
-  <div class="container footer-grid">
-    <div>
-      <p class="footer-logo"><span class="logo-mark">✦</span>빛나는교회</p>
-      <p class="footer-desc" data-bind="hero.verse_line1"></p>
-    </div>
-    <div>
-      <p class="footer-heading">교회 연락처 안내</p>
-      <p class="footer-line" data-bind="contact.church_name"></p>
-      <p class="footer-line">담임목사 <span data-bind="contact.pastor"></span></p>
-      <p class="footer-line">T. <span data-bind="contact.phone"></span> · F. <span data-bind="contact.fax"></span></p>
-      <p class="footer-line" data-bind="contact.email"></p>
-    </div>
-    <div>
-      <p class="footer-heading">오시는 길</p>
-      <p class="footer-line" data-bind="contact.address"></p>
-      <p class="footer-line" data-bind="contact.bus"></p>
-    </div>
-  </div>
-  <p class="footer-copy">COPYRIGHT © 빛나는교회. ALL RIGHTS RESERVED.</p>
-</footer>
+<div id="footerHost"></div>
 
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script src="/common.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

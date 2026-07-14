@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>예배안내 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">FAITH LIFE TIMETABLE</span>
+  <h1>예배안내</h1>
+  <p>빛나는교회 정규 예배 시간표입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body">
+  <div class="worship-table-wrap">
+    <table class="worship-table">
+      <thead><tr><th>예배명</th><th>시간</th></tr></thead>
+      <tbody id="worship-tbody-page"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script src="/common.js"></script>
+<script>
+document.addEventListener('sitedata:loaded', (e) => {
+  const tbody = document.getElementById('worship-tbody-page');
+  tbody.innerHTML = '';
+  e.detail.worship.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${item.name}</td><td>${item.time}</td>`;
+    tbody.appendChild(tr);
+  });
+});
+</script>
+</body>
+</html>

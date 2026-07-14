@@ -1,20 +1,4 @@
-// 네비게이션 모바일 토글
-const navToggle = document.getElementById('navToggle');
-const nav = document.getElementById('nav');
-navToggle.addEventListener('click', () => nav.classList.toggle('open'));
-nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => nav.classList.remove('open')));
-
-// data-bind="a.b.c" 경로로 JSON 값을 DOM에 채워넣는다
-function applyBindings(root, data) {
-  root.querySelectorAll('[data-bind]').forEach(el => {
-    const path = el.getAttribute('data-bind').split('.');
-    let value = data;
-    for (const key of path) {
-      value = value ? value[key] : undefined;
-    }
-    if (value !== undefined) el.textContent = value;
-  });
-}
+// applyBindings()는 common.js에 정의되어 있다 (헤더/푸터 포함 전체 페이지 공통)
 
 function renderParagraphs(container, text) {
   container.innerHTML = '';
@@ -26,7 +10,7 @@ function renderParagraphs(container, text) {
   });
 }
 
-fetch('content/site.json')
+fetch('/content/site.json')
   .then(res => res.json())
   .then(data => {
     applyBindings(document, data);
@@ -68,10 +52,35 @@ fetch('content/site.json')
       galleryList.innerHTML = '<li class="gallery-empty">등록된 자료가 아직 없습니다.</li>';
     }
 
+    // 메인 배경 사진 슬라이드 (15초마다 자동 전환)
+    initHeroSlides(data.hero.images);
+
     // 매일 묵상 말씀 팝업
     showDailyVerse(data.daily_verses);
   })
   .catch(err => console.error('site.json 로드 실패:', err));
+
+function initHeroSlides(images) {
+  const wrap = document.getElementById('heroSlides');
+  if (!wrap || !images || images.length === 0) return;
+
+  images.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'hero-slide' + (i === 0 ? ' active' : '');
+    div.style.backgroundImage = `url("${item.image}")`;
+    wrap.appendChild(div);
+  });
+
+  if (images.length <= 1) return;
+
+  const slides = wrap.querySelectorAll('.hero-slide');
+  let current = 0;
+  setInterval(() => {
+    slides[current].classList.remove('active');
+    current = (current + 1) % slides.length;
+    slides[current].classList.add('active');
+  }, 15000);
+}
 
 function showDailyVerse(verses) {
   if (!verses || verses.length === 0) return;
@@ -104,7 +113,7 @@ function showDailyVerse(verses) {
   });
 }
 
-fetch('content/notices.json')
+fetch('/content/notices.json')
   .then(res => res.json())
   .then(data => {
     const list = document.getElementById('notice-list');
