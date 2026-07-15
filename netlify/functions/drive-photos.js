@@ -35,14 +35,32 @@ function toPhoto(p) {
 
 const FIELDS = "files(id,name,mimeType,thumbnailLink,webViewLink,createdTime)";
 
-// 행사 폴더 이름 맨 앞의 YYYYMMDD를 실제 행사 날짜로 해석한다 (예: "20260607 한우리교회 선교예배" → 2026-06-07)
+// 행사 폴더 이름에서 실제 행사 날짜를 해석한다
+// 1) "20260607 한우리교회 선교예배" 처럼 맨 앞 8자리가 YYYYMMDD인 경우 → 정확한 날짜
+// 2) "2019년도 자료", "2024 샘터교회선교예배" 처럼 연도만 있는 경우 → 그 해 1월 1일로 근사
 function parseFolderDate(name) {
-  const m = name && name.match(/^(\d{4})(\d{2})(\d{2})/);
-  if (!m) return null;
-  const [, y, mo, d] = m;
-  const date = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
-  if (isNaN(date.getTime())) return null;
-  return date.toISOString();
+  if (!name) return null;
+
+  let m = name.match(/^(\d{4})(\d{2})(\d{2})(?!\d)/);
+  if (m) {
+    const [, y, mo, d] = m;
+    const monthNum = Number(mo), dayNum = Number(d);
+    if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+      const date = new Date(Date.UTC(Number(y), monthNum - 1, dayNum));
+      if (!isNaN(date.getTime())) return date.toISOString();
+    }
+  }
+
+  m = name.match(/^(\d{4})(?!\d)/);
+  if (m) {
+    const year = Number(m[1]);
+    if (year >= 2000 && year <= 2100) {
+      const date = new Date(Date.UTC(year, 0, 1));
+      if (!isNaN(date.getTime())) return date.toISOString();
+    }
+  }
+
+  return null;
 }
 
 // 특정 폴더(행사 폴더) 안의 사진 전체를 최신순으로 반환
