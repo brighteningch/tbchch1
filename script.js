@@ -84,6 +84,15 @@ fetch('/content/site.json')
     iframe.src = `https://www.youtube.com/embed/videoseries?list=${data.sermon.youtube_playlist_id}`;
     document.getElementById('sermon-channel-link').href = data.sermon.youtube_channel_url;
 
+    // 빠른링크: 유튜브 · 인스타그램
+    document.getElementById('qcardYoutube').href = data.sermon.youtube_channel_url;
+    const igCard = document.getElementById('qcardInstagram');
+    if (data.contact && data.contact.instagram_url) {
+      igCard.href = data.contact.instagram_url;
+    } else {
+      igCard.style.display = 'none';
+    }
+
     // 갤러리: 카테고리 4개 요약
     loadGallery('gallery-cat-grid');
 
