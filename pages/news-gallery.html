@@ -23,6 +23,19 @@
   <div class="gallery-cat-grid" id="gallery-cat-grid-page"></div>
 </div>
 
+<div class="photo-lightbox" id="photoLightbox" hidden>
+  <div class="lightbox-header">
+    <div>
+      <p class="lightbox-title" id="lightboxTitle"></p>
+      <p class="lightbox-sub" id="lightboxSub"></p>
+    </div>
+    <button class="lightbox-close" id="lightboxClose" aria-label="닫기">✕</button>
+  </div>
+  <div class="lightbox-body">
+    <div class="lightbox-grid" id="lightboxGrid"></div>
+  </div>
+</div>
+
 <div id="footerHost"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
@@ -35,33 +48,47 @@ fetch('/.netlify/functions/drive-photos')
   .then(data => {
     const featuredEl = document.getElementById('gallery-featured-page');
     const catGridEl = document.getElementById('gallery-cat-grid-page');
-    if (data.error || !data.featured) {
+    if (data.error || !data.featuredFolder) {
       featuredEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
       return;
     }
-    const f = data.featured;
+    const f = data.featuredFolder;
+    const thumb = (data.featuredPhotos && data.featuredPhotos[0] && data.featuredPhotos[0].thumb) || f.thumb;
     featuredEl.innerHTML = `
-      <div class="gallery-featured-card">
+      <button type="button" class="gallery-featured-card" id="galleryFeaturedBtn">
         <div class="gallery-featured-img">
-          <span class="gallery-featured-badge">NEW FEATURED PHOTO</span>
-          <img src="${f.thumb}" alt="${f.name}" loading="lazy">
+          <span class="gallery-featured-badge">NEW FEATURED ALBUM</span>
+          <span class="gallery-featured-count">${f.count}장</span>
+          <img src="${thumb}" alt="${f.name}" loading="lazy">
         </div>
         <div class="gallery-featured-info">
           <p class="gallery-featured-cat">${f.category}</p>
-          <p class="gallery-featured-title">${f.event}</p>
-          <p class="gallery-featured-date">${formatDate(f.createdTime)} 업데이트</p>
-          <a href="${f.link}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="width:fit-content;">앨범 사진첩 전체보기 →</a>
+          <p class="gallery-featured-title">${f.name}</p>
+          <p class="gallery-featured-date">${formatDate(f.date)} 업데이트 · 사진 ${f.count}장</p>
+          <span class="btn btn-primary btn-sm" style="width:fit-content;">앨범 전체보기 →</span>
         </div>
-      </div>`;
-    catGridEl.innerHTML = (data.categories || []).map(c => `
-      <a href="${c.photo.link}" target="_blank" rel="noopener" class="gallery-cat-card">
-        <div class="gallery-cat-thumb"><img src="${c.photo.thumb}" alt="${c.name}" loading="lazy"></div>
+      </button>`;
+    document.getElementById('galleryFeaturedBtn').addEventListener('click', () => {
+      openFolderLightbox(f.id, f.name, f.category);
+    });
+
+    catGridEl.innerHTML = (data.folders || []).map((folder, i) => `
+      <button type="button" class="gallery-cat-card" data-folder-index="${i}">
+        <div class="gallery-cat-thumb">
+          <img src="${folder.thumb}" alt="${folder.name}" loading="lazy">
+          <span class="gallery-cat-count">${folder.count}장</span>
+        </div>
         <div>
-          <p class="gallery-cat-label">행사 사진첩</p>
-          <p class="gallery-cat-name">${c.name}</p>
-          <p class="gallery-cat-date">최근 업데이트 · ${formatDate(c.photo.createdTime)}</p>
+          <p class="gallery-cat-label">${folder.category}</p>
+          <p class="gallery-cat-name">${folder.name}</p>
+          <p class="gallery-cat-date">최근 업데이트 · ${formatDate(folder.date)}</p>
         </div>
-      </a>`).join('');
+      </button>`).join('');
+
+    catGridEl.querySelectorAll('[data-folder-index]').forEach(btn => {
+      const folder = data.folders[Number(btn.dataset.folderIndex)];
+      btn.addEventListener('click', () => openFolderLightbox(folder.id, folder.name, folder.category));
+    });
   })
   .catch(() => {
     document.getElementById('gallery-featured-page').innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';

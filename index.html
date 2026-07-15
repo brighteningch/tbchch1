@@ -123,11 +123,24 @@
   <div class="container">
     <p class="eyebrow">ACTIVE BEAUTIFUL MOMENTS</p>
     <h2 class="section-title">빛나는교회 갤러리</h2>
-    <p class="gallery-desc">최근에 올라온 사진 순서대로 보여드립니다.</p>
+    <p class="gallery-desc">최근에 올라온 사진 폴더를 최신순으로 보여드립니다. 클릭하면 폴더 안 사진을 모두 볼 수 있어요.</p>
     <div id="gallery-featured"></div>
     <div class="gallery-cat-grid" id="gallery-cat-grid"></div>
   </div>
 </section>
+
+<div class="photo-lightbox" id="photoLightbox" hidden>
+  <div class="lightbox-header">
+    <div>
+      <p class="lightbox-title" id="lightboxTitle"></p>
+      <p class="lightbox-sub" id="lightboxSub"></p>
+    </div>
+    <button class="lightbox-close" id="lightboxClose" aria-label="닫기">✕</button>
+  </div>
+  <div class="lightbox-body">
+    <div class="lightbox-grid" id="lightboxGrid"></div>
+  </div>
+</div>
 
 <section class="notice" id="notice">
   <div class="container narrow">

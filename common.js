@@ -26,6 +26,49 @@ function initMegaMenu() {
   });
 }
 
+// 폴더(행사) 사진 전체보기 라이트박스 — 여러 페이지에서 공용으로 쓴다
+function initPhotoLightbox() {
+  const box = document.getElementById('photoLightbox');
+  if (!box) return;
+  const closeBtn = document.getElementById('lightboxClose');
+  closeBtn.addEventListener('click', closePhotoLightbox);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !box.hidden) closePhotoLightbox();
+  });
+}
+
+function closePhotoLightbox() {
+  const box = document.getElementById('photoLightbox');
+  if (box) box.hidden = true;
+}
+
+function openFolderLightbox(folderId, folderName, category) {
+  const box = document.getElementById('photoLightbox');
+  if (!box) return;
+  document.getElementById('lightboxTitle').textContent = folderName || '';
+  document.getElementById('lightboxSub').textContent = category ? `${category} · 불러오는 중...` : '불러오는 중...';
+  document.getElementById('lightboxGrid').innerHTML = '<p class="lightbox-loading">사진을 불러오는 중입니다...</p>';
+  box.hidden = false;
+
+  fetch(`/.netlify/functions/drive-photos?folder=${encodeURIComponent(folderId)}`)
+    .then(res => res.json())
+    .then(data => {
+      const photos = data.photos || [];
+      document.getElementById('lightboxSub').textContent = category ? `${category} · 사진 ${photos.length}장` : `사진 ${photos.length}장`;
+      const grid = document.getElementById('lightboxGrid');
+      if (photos.length === 0) {
+        grid.innerHTML = '<p class="lightbox-loading">사진을 불러오지 못했습니다.</p>';
+        return;
+      }
+      grid.innerHTML = photos.map(p =>
+        `<a href="${p.link}" target="_blank" rel="noopener" title="${p.name}"><img src="${p.thumb}" alt="${p.name}" loading="lazy"></a>`
+      ).join('');
+    })
+    .catch(() => {
+      document.getElementById('lightboxGrid').innerHTML = '<p class="lightbox-loading">사진을 불러오지 못했습니다.</p>';
+    });
+}
+
 function initMobileNav() {
   const navToggle = document.getElementById('navToggle');
   const nav = document.getElementById('nav');
@@ -82,6 +125,7 @@ function injectPartials(callback) {
     if (footerHost) footerHost.innerHTML = footerHtml;
     initMegaMenu();
     initMobileNav();
+    initPhotoLightbox();
     if (window.renderMemberAuthArea) renderMemberAuthArea();
     if (callback) callback();
   });

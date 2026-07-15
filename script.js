@@ -5,7 +5,8 @@ function formatDate(iso) {
   return iso.slice(0, 10);
 }
 
-// 구글드라이브 대표 사진 + 카테고리별 최근 사진을 불러와 카드로 그린다 (Netlify Function 경유)
+// 구글드라이브 최신 폴더(크게) + 최근 폴더 목록을 불러와 카드로 그린다 (Netlify Function 경유)
+// 카드를 클릭하면 라이트박스로 그 폴더의 사진을 전부 보여준다 (common.js의 openFolderLightbox)
 function loadGallery(featuredId, catGridId) {
   const featuredEl = document.getElementById(featuredId);
   const catGridEl = document.getElementById(catGridId);
@@ -14,36 +15,49 @@ function loadGallery(featuredId, catGridId) {
   fetch('/.netlify/functions/drive-photos')
     .then(res => res.json())
     .then(data => {
-      if (data.error || !data.featured) {
+      if (data.error || !data.featuredFolder) {
         featuredEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
         catGridEl.innerHTML = '';
         return;
       }
 
-      const f = data.featured;
+      const f = data.featuredFolder;
+      const thumb = (data.featuredPhotos && data.featuredPhotos[0] && data.featuredPhotos[0].thumb) || f.thumb;
       featuredEl.innerHTML = `
-        <div class="gallery-featured-card">
+        <button type="button" class="gallery-featured-card" id="galleryFeaturedBtn">
           <div class="gallery-featured-img">
-            <span class="gallery-featured-badge">NEW FEATURED PHOTO</span>
-            <img src="${f.thumb}" alt="${f.name}" loading="lazy">
+            <span class="gallery-featured-badge">NEW FEATURED ALBUM</span>
+            <span class="gallery-featured-count">${f.count}장</span>
+            <img src="${thumb}" alt="${f.name}" loading="lazy">
           </div>
           <div class="gallery-featured-info">
             <p class="gallery-featured-cat">${f.category}</p>
-            <p class="gallery-featured-title">${f.event}</p>
-            <p class="gallery-featured-date">${formatDate(f.createdTime)} 업데이트</p>
-            <a href="${f.link}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="width:fit-content;">앨범 사진첩 전체보기 →</a>
+            <p class="gallery-featured-title">${f.name}</p>
+            <p class="gallery-featured-date">${formatDate(f.date)} 업데이트 · 사진 ${f.count}장</p>
+            <span class="btn btn-primary btn-sm" style="width:fit-content;">앨범 전체보기 →</span>
           </div>
-        </div>`;
+        </button>`;
+      document.getElementById('galleryFeaturedBtn').addEventListener('click', () => {
+        openFolderLightbox(f.id, f.name, f.category);
+      });
 
-      catGridEl.innerHTML = (data.categories || []).map(c => `
-        <a href="${c.photo.link}" target="_blank" rel="noopener" class="gallery-cat-card">
-          <div class="gallery-cat-thumb"><img src="${c.photo.thumb}" alt="${c.name}" loading="lazy"></div>
-          <div>
-            <p class="gallery-cat-label">행사 사진첩</p>
-            <p class="gallery-cat-name">${c.name}</p>
-            <p class="gallery-cat-date">최근 업데이트 · ${formatDate(c.photo.createdTime)}</p>
+      catGridEl.innerHTML = (data.folders || []).map((folder, i) => `
+        <button type="button" class="gallery-cat-card" data-folder-index="${i}">
+          <div class="gallery-cat-thumb">
+            <img src="${folder.thumb}" alt="${folder.name}" loading="lazy">
+            <span class="gallery-cat-count">${folder.count}장</span>
           </div>
-        </a>`).join('');
+          <div>
+            <p class="gallery-cat-label">${folder.category}</p>
+            <p class="gallery-cat-name">${folder.name}</p>
+            <p class="gallery-cat-date">최근 업데이트 · ${formatDate(folder.date)}</p>
+          </div>
+        </button>`).join('');
+
+      catGridEl.querySelectorAll('[data-folder-index]').forEach(btn => {
+        const folder = data.folders[Number(btn.dataset.folderIndex)];
+        btn.addEventListener('click', () => openFolderLightbox(folder.id, folder.name, folder.category));
+      });
     })
     .catch(() => {
       featuredEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';

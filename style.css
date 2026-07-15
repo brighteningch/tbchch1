@@ -451,7 +451,7 @@ section { padding: 88px 0; }
 .gallery-desc { text-align: center; color: var(--text-gray); margin-bottom: 28px; font-size: 14px; }
 .gallery-empty, .photo-grid-empty { text-align: center; color: var(--text-gray); font-size: 14px; padding: 20px 0; }
 
-/* 대표(featured) 사진 카드 */
+/* 최신 대표 폴더 카드 (크게) */
 .gallery-featured-card {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
@@ -461,6 +461,11 @@ section { padding: 88px 0; }
   border-radius: 18px;
   overflow: hidden;
   margin-bottom: 20px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-body);
+  padding: 0;
 }
 .gallery-featured-img { position: relative; aspect-ratio: 4/3; }
 .gallery-featured-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -475,12 +480,22 @@ section { padding: 88px 0; }
   padding: 6px 12px;
   border-radius: 20px;
 }
+.gallery-featured-count {
+  position: absolute;
+  bottom: 14px; right: 14px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+}
 .gallery-featured-info { padding: 32px; display: flex; flex-direction: column; justify-content: center; }
 .gallery-featured-cat { color: var(--green); font-size: 13px; font-weight: 700; margin-bottom: 8px; }
 .gallery-featured-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; line-height: 1.4; }
 .gallery-featured-date { color: var(--text-gray); font-size: 13px; margin-bottom: 20px; }
 
-/* 카테고리별 최근 사진 카드 */
+/* 최근 행사 폴더 그리드 */
 .gallery-cat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -495,6 +510,10 @@ section { padding: 88px 0; }
   padding: 14px;
   text-decoration: none;
   color: var(--text-dark);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  width: 100%;
 }
 .gallery-cat-thumb {
   width: 74px; height: 74px;
@@ -502,8 +521,18 @@ section { padding: 88px 0; }
   border-radius: 10px;
   overflow: hidden;
   background: var(--bg-cool);
+  position: relative;
 }
 .gallery-cat-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery-cat-count {
+  position: absolute;
+  bottom: 3px; right: 3px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
 .gallery-cat-label { color: var(--green); font-size: 11px; font-weight: 700; margin-bottom: 3px; }
 .gallery-cat-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
 .gallery-cat-date { color: var(--text-gray); font-size: 12.5px; }
@@ -512,6 +541,39 @@ section { padding: 88px 0; }
   .gallery-featured-card { grid-template-columns: 1fr; }
   .gallery-featured-info { padding: 22px; }
 }
+
+/* 폴더 사진 전체보기 라이트박스 */
+.photo-lightbox {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(10, 20, 35, 0.92);
+  display: flex; flex-direction: column;
+  padding: 20px;
+}
+.photo-lightbox[hidden] { display: none; }
+.lightbox-header {
+  display: flex; justify-content: space-between; align-items: center;
+  color: #fff; margin-bottom: 18px; flex-wrap: wrap; gap: 10px;
+}
+.lightbox-title { font-size: 18px; font-weight: 800; }
+.lightbox-sub { font-size: 13px; color: #b9c8db; margin-top: 4px; }
+.lightbox-close {
+  background: rgba(255,255,255,0.12); border: none; color: #fff;
+  width: 38px; height: 38px; border-radius: 50%; font-size: 18px; cursor: pointer;
+  flex-shrink: 0;
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.22); }
+.lightbox-body { flex: 1; overflow-y: auto; }
+.lightbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.lightbox-grid a { display: block; border-radius: 10px; overflow: hidden; aspect-ratio: 1; background: rgba(255,255,255,0.06); }
+.lightbox-grid img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.2s; }
+.lightbox-grid a:hover img { transform: scale(1.05); }
+.lightbox-loading { text-align: center; color: #b9c8db; padding: 60px 0; }
 
 /* Notice */
 .notice { background: #fff; }
