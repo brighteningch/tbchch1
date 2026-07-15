@@ -1,5 +1,12 @@
 // 모든 페이지 공통: 헤더/푸터 삽입, 메가메뉴, 모바일메뉴, 로그인 상태, 공통 데이터 바인딩
 
+// Netlify Identity 초대/비밀번호 재설정 메일 링크는 사이트 루트로 오는데,
+// 그 토큰을 처리하는 위젯은 /admin/ 페이지에만 있다. 루트로 들어온 토큰을
+// 감지해서 /admin/으로 그대로 넘겨준다 (관리자가 매번 URL을 직접 고치지 않도록).
+if (!location.pathname.startsWith('/admin') && /recovery_token|confirmation_token|invite_token|type=recovery/.test(location.hash)) {
+  location.replace('/admin/' + location.hash);
+}
+
 function applyBindings(root, data) {
   root.querySelectorAll('[data-bind]').forEach(el => {
     const path = el.getAttribute('data-bind').split('.');
