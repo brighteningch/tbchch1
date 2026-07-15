@@ -1,5 +1,6 @@
-// 회원가입/로그인 (Supabase) — "연락처(전화번호)"로 로그인하지만 내부적으로는 합성 이메일을 씀
-// {전화번호 숫자만}@members.tbchch1.com 형태로 자동 변환해 Supabase Auth(이메일 기반)에 맞춘다.
+// 회원가입/로그인 (Supabase) — "이름"으로 로그인하지만 내부적으로는 합성 이메일을 씀
+// {이름(공백제거)}@members.tbchch1.com 형태로 자동 변환해 Supabase Auth(이메일 기반)에 맞춘다.
+// 주의: 동명이인이 있으면 두 번째 가입자는 "이미 사용중인 이름"으로 막힌다 (작은 공동체 전제 하의 단순화).
 const MEMBER_EMAIL_DOMAIN = "members.tbchch1.com";
 
 function getSupabaseClient() {
@@ -10,13 +11,13 @@ function getSupabaseClient() {
   return window.__sbClient;
 }
 
-// 전화번호에서 숫자만 뽑아 로그인 식별자로 쓴다 (하이픈 있든 없든 같은 사람으로 인식)
-function phoneToKey(phone) {
-  return phone.replace(/\D/g, "");
+// 이름에서 공백만 제거해 로그인 식별자로 쓴다
+function nameToKey(name) {
+  return name.replace(/\s+/g, "").toLowerCase();
 }
 
-function phoneToEmail(phone) {
-  return `${phoneToKey(phone)}@${MEMBER_EMAIL_DOMAIN}`;
+function nameToEmail(name) {
+  return `${encodeURIComponent(nameToKey(name))}@${MEMBER_EMAIL_DOMAIN}`;
 }
 
 function requireSupabaseClient() {
@@ -25,16 +26,16 @@ function requireSupabaseClient() {
   return sb;
 }
 
-async function checkPhoneAvailable(phone) {
+async function checkNameAvailable(name) {
   const sb = requireSupabaseClient();
-  const { data, error } = await sb.rpc("username_available", { check_username: phoneToKey(phone) });
+  const { data, error } = await sb.rpc("username_available", { check_username: nameToKey(name) });
   if (error) throw error;
   return data;
 }
 
-async function memberSignUp({ name, password, phone, position }) {
+async function memberSignUp({ name, password, position }) {
   const sb = requireSupabaseClient();
-  const email = phoneToEmail(phone);
+  const email = nameToEmail(name);
   const { data, error } = await sb.auth.signUp({ email, password });
   if (error) throw error;
   const userId = data.user && data.user.id;
@@ -42,18 +43,17 @@ async function memberSignUp({ name, password, phone, position }) {
 
   const { error: profileError } = await sb.from("profiles").insert({
     id: userId,
-    username: phoneToKey(phone),
+    username: nameToKey(name),
     name: name.trim(),
-    phone: phone.trim(),
     position: position.trim(),
   });
   if (profileError) throw profileError;
   return data;
 }
 
-async function memberSignIn({ phone, password }) {
+async function memberSignIn({ name, password }) {
   const sb = requireSupabaseClient();
-  const email = phoneToEmail(phone);
+  const email = nameToEmail(name);
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data;

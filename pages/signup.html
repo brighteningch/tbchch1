@@ -26,9 +26,6 @@
     <label>비밀번호
       <input type="password" id="suPassword" required minlength="6" autocomplete="new-password">
     </label>
-    <label>연락처
-      <input type="tel" id="suPhone" required placeholder="010-0000-0000">
-    </label>
     <label>직분
       <input type="text" id="suPosition" required placeholder="예: 집사, 권사, 성도, 청년">
     </label>
@@ -51,17 +48,16 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
 
   const name = document.getElementById('suName').value;
   const password = document.getElementById('suPassword').value;
-  const phone = document.getElementById('suPhone').value;
   const position = document.getElementById('suPosition').value;
 
   try {
-    const available = await checkPhoneAvailable(phone);
+    const available = await checkNameAvailable(name);
     if (!available) {
-      errorEl.textContent = '이미 가입된 연락처입니다.';
+      errorEl.textContent = '이미 사용중인 이름입니다. (동명이인이신 경우 관리자에게 문의해주세요)';
       errorEl.hidden = false;
       return;
     }
-    await memberSignUp({ name, password, phone, position });
+    await memberSignUp({ name, password, position });
     alert('회원가입이 완료됐습니다. 로그인해주세요.');
     location.href = '/pages/login.html';
   } catch (err) {

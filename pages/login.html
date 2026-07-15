@@ -14,14 +14,14 @@
 <section class="page-hero">
   <span class="page-badge">LOGIN</span>
   <h1>로그인</h1>
-  <p>연락처와 비밀번호로 로그인해주세요.</p>
+  <p>이름과 비밀번호로 로그인해주세요.</p>
   <div class="bar"></div>
 </section>
 
 <div class="page-body" style="max-width:420px;">
   <form id="loginForm" class="auth-form">
-    <label>연락처
-      <input type="tel" id="loginPhone" required autocomplete="tel" placeholder="010-0000-0000">
+    <label>이름
+      <input type="text" id="loginName" required autocomplete="name">
     </label>
     <label>비밀번호
       <input type="password" id="loginPassword" required autocomplete="current-password">
@@ -42,13 +42,13 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errorEl = document.getElementById('loginError');
   errorEl.hidden = true;
-  const phone = document.getElementById('loginPhone').value;
+  const name = document.getElementById('loginName').value;
   const password = document.getElementById('loginPassword').value;
   try {
-    await memberSignIn({ phone, password });
+    await memberSignIn({ name, password });
     location.href = '/';
   } catch (err) {
-    errorEl.textContent = '연락처 또는 비밀번호가 올바르지 않습니다.';
+    errorEl.textContent = '이름 또는 비밀번호가 올바르지 않습니다.';
     errorEl.hidden = false;
   }
 });
