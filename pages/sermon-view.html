@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>말씀과 찬양 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge" id="sermonBadge">WORD &amp; PRAISE</span>
+  <h1 id="sermonPageTitle">말씀과 찬양</h1>
+  <p>선택하신 말씀·찬양 내용을 확인하세요.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:1080px;">
+  <div class="sermon-view">
+    <div class="sermon-view-main">
+      <div class="video-wrap" id="sermonVideoWrap"></div>
+      <h2 class="sermon-view-title" id="sermonTitle"></h2>
+      <div class="sermon-view-meta">
+        <p><strong>설교자</strong> <span id="sermonSpeaker"></span></p>
+        <p><strong>본문</strong> <span id="sermonScripture"></span></p>
+        <p><strong>날짜</strong> <span id="sermonDate"></span></p>
+      </div>
+      <div class="sermon-view-body" id="sermonBody"></div>
+    </div>
+    <aside class="sermon-view-side">
+      <h3>목록</h3>
+      <ul id="sermonSideList"></ul>
+    </aside>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/common.js"></script>
+<script>
+function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function youtubeEmbedUrl(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
+  return m ? `https://www.youtube.com/embed/${m[1]}` : null;
+}
+
+const CATEGORY_LABELS = {
+  'sermon-sunday': '주일설교',
+  'sermon-wed': '수요설교',
+  'sermon-fri': '금요설교',
+  'praise-wed': '수요찬양',
+  'praise-fri': '금요찬양'
+};
+
+const params = new URLSearchParams(location.search);
+const category = params.get('category') || '';
+const dateParam = params.get('date') || '';
+const titleParam = params.get('title') || '';
+
+fetch('/content/sermons.json')
+  .then(res => res.json())
+  .then(data => {
+    const items = (data.sermons || []).filter(s => s.category === category);
+    const current = items.find(s => (s.date || '') === dateParam && (s.title || '') === titleParam) || items[0];
+
+    const label = CATEGORY_LABELS[category] || '말씀과 찬양';
+    document.getElementById('sermonBadge').textContent = label.toUpperCase();
+    document.getElementById('sermonPageTitle').textContent = label;
+
+    if (!current) {
+      document.getElementById('sermonTitle').textContent = '내용을 찾을 수 없습니다.';
+      document.querySelector('.sermon-view-meta').hidden = true;
+      return;
+    }
+
+    document.getElementById('sermonTitle').textContent = current.title || '';
+    document.getElementById('sermonSpeaker').textContent = current.speaker || '-';
+    document.getElementById('sermonScripture').textContent = current.scripture || '-';
+    document.getElementById('sermonDate').textContent = (current.date || '').slice(0, 10);
+    document.getElementById('sermonBody').innerHTML = (current.body || '')
+      .split('\n').map(l => escHtml(l)).join('<br>');
+
+    const embedUrl = youtubeEmbedUrl(current.video_url);
+    const videoWrap = document.getElementById('sermonVideoWrap');
+    if (embedUrl) {
+      videoWrap.innerHTML = `<iframe src="${embedUrl}" title="${escHtml(current.title)}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+    } else if (current.video_url) {
+      videoWrap.outerHTML = `<div style="text-align:center;margin-bottom:24px;"><a href="${current.video_url}" target="_blank" rel="noopener" class="btn btn-primary">영상 링크로 이동</a></div>`;
+    } else {
+      videoWrap.remove();
+    }
+
+    const sorted = items.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    const sideList = document.getElementById('sermonSideList');
+    sideList.innerHTML = sorted.map(s => {
+      const isCurrent = s === current;
+      const link = `/pages/sermon-view.html?category=${encodeURIComponent(category)}&date=${encodeURIComponent(s.date || '')}&title=${encodeURIComponent(s.title || '')}`;
+      return `<li class="${isCurrent ? 'active' : ''}"><a href="${link}">
+        <span class="sermon-side-title">${escHtml(s.title)}</span>
+        <span class="sermon-side-date">${(s.date || '').slice(0, 10)}</span>
+      </a></li>`;
+    }).join('');
+  })
+  .catch(() => {
+    document.getElementById('sermonTitle').textContent = '불러오지 못했습니다.';
+  });
+</script>
+</body>
+</html>

@@ -128,3 +128,30 @@ collections:
               - { label: "날짜", name: "date", widget: datetime, format: "YYYY-MM-DD", date_format: "YYYY-MM-DD", time_format: false }
               - { label: "제목", name: "title", widget: string, default: "주일 주보" }
               - { label: "주보 파일 (PDF 또는 이미지)", name: "file", widget: file }
+
+  - name: "sermons"
+    label: "말씀과 찬양"
+    files:
+      - name: "sermons"
+        label: "말씀·찬양 목록 (새 글쓰기는 여기서 목록에 추가)"
+        file: "content/sermons.json"
+        fields:
+          - label: "목록"
+            name: "sermons"
+            widget: list
+            fields:
+              - label: "분류"
+                name: "category"
+                widget: select
+                options:
+                  - { label: "주일설교", value: "sermon-sunday" }
+                  - { label: "수요설교", value: "sermon-wed" }
+                  - { label: "금요설교", value: "sermon-fri" }
+                  - { label: "수요찬양", value: "praise-wed" }
+                  - { label: "금요찬양", value: "praise-fri" }
+              - { label: "날짜", name: "date", widget: datetime, format: "YYYY-MM-DD", date_format: "YYYY-MM-DD", time_format: false }
+              - { label: "제목", name: "title", widget: string }
+              - { label: "본문 (성경 구절)", name: "scripture", widget: string, required: false }
+              - { label: "설교자 / 인도자", name: "speaker", widget: string, required: false }
+              - { label: "영상 링크주소 (유튜브 등)", name: "video_url", widget: string, required: false }
+              - { label: "상세 내용 (순서, 설명 등)", name: "body", widget: text, required: false }

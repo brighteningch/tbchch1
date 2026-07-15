@@ -18,16 +18,16 @@
   <div class="bar"></div>
 </section>
 
-<div class="page-body">
-  <p style="text-align:center;color:var(--text-gray);margin-bottom:24px;">찬양별 재생목록 구분은 준비 중입니다 — 우선 전체 채널 영상이 표시됩니다.</p>
-  <div class="video-wrap">
-    <iframe id="sermon-iframe-page" src="" title="빛나는교회 설교 영상" frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen loading="lazy"></iframe>
+<div class="page-body" style="max-width:980px;">
+  <div class="sermon-table-wrap">
+    <table class="sermon-table">
+      <thead>
+        <tr><th>번호</th><th>제목</th><th>본문</th><th>설교자</th><th>날짜</th><th>보기</th></tr>
+      </thead>
+      <tbody id="sermon-tbody" data-category="praise-wed"></tbody>
+    </table>
   </div>
-  <div style="text-align:center;margin-top:24px;">
-    <a id="sermon-channel-link-page" href="#" target="_blank" rel="noopener" class="btn btn-primary">유튜브 채널에서 더보기</a>
-  </div>
+  <p class="sermon-empty" id="sermon-empty" hidden>아직 등록된 말씀이 없습니다.</p>
 </div>
 
 <div id="footerHost"></div>
@@ -36,11 +36,35 @@
 <script src="/member-auth.js"></script>
 <script src="/common.js"></script>
 <script>
-document.addEventListener('sitedata:loaded', (e) => {
-  const data = e.detail;
-  document.getElementById('sermon-iframe-page').src = `https://www.youtube.com/embed/videoseries?list=${data.sermon.youtube_playlist_id}`;
-  document.getElementById('sermon-channel-link-page').href = data.sermon.youtube_channel_url;
-});
+function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+fetch('/content/sermons.json')
+  .then(res => res.json())
+  .then(data => {
+    const tbody = document.getElementById('sermon-tbody');
+    const category = tbody.dataset.category;
+    const items = (data.sermons || [])
+      .filter(s => s.category === category)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (items.length === 0) {
+      document.getElementById('sermon-empty').hidden = false;
+      return;
+    }
+    tbody.innerHTML = items.map((s, i) => {
+      const link = `/pages/sermon-view.html?category=${encodeURIComponent(category)}&date=${encodeURIComponent(s.date || '')}&title=${encodeURIComponent(s.title || '')}`;
+      return `
+      <tr>
+        <td>${items.length - i}</td>
+        <td class="sermon-title"><a href="${link}">${escHtml(s.title)}</a></td>
+        <td>${escHtml(s.scripture || '')}</td>
+        <td>${escHtml(s.speaker || '')}</td>
+        <td>${(s.date || '').slice(0, 10)}</td>
+        <td>${s.video_url ? `<a href="${link}" class="sermon-watch" aria-label="영상보기">▶</a>` : ''}</td>
+      </tr>`;
+    }).join('');
+  })
+  .catch(() => {
+    document.getElementById('sermon-empty').hidden = false;
+  });
 </script>
 </body>
 </html>
