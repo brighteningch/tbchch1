@@ -420,6 +420,12 @@ body {
 .qcard2--navy .qcard2-icon { background: rgba(255,255,255,0.14); }
 .qcard2--navy p { color: #c3d0e2; }
 
+.qcard2--pdf { background: linear-gradient(160deg, #eaf1fc 0%, #dce9fa 100%); border-color: #d3e2f7; }
+.qcard2--pdf .qcard2-icon { background: rgba(255,255,255,0.7); }
+
+.qcard2--youtube { background: linear-gradient(160deg, #fdeeee 0%, #fbdfe0 100%); border-color: #f8cfd0; }
+.qcard2--youtube .qcard2-icon { background: rgba(255,255,255,0.7); }
+
 .qcard2--insta {
   background: linear-gradient(135deg, #f9a04a 0%, #e04593 55%, #7c4fe0 100%);
   color: #fff;
