@@ -120,12 +120,29 @@ function initHeroSlides(images) {
 
   const slides = wrap.querySelectorAll('.hero-slide');
   let current = 0;
-  setInterval(() => {
+  let timer = null;
+
+  function goTo(index) {
     slides[current].classList.remove('active');
-    current = (current + 1) % slides.length;
+    current = (index + slides.length) % slides.length;
     slides[current].classList.add('active');
     setOverlay(current);
-  }, 15000);
+  }
+
+  function restartTimer() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => goTo(current + 1), 15000);
+  }
+  restartTimer();
+
+  const prevBtn = document.getElementById('heroPrev');
+  const nextBtn = document.getElementById('heroNext');
+  if (prevBtn && nextBtn) {
+    prevBtn.hidden = false;
+    nextBtn.hidden = false;
+    prevBtn.addEventListener('click', () => { goTo(current - 1); restartTimer(); });
+    nextBtn.addEventListener('click', () => { goTo(current + 1); restartTimer(); });
+  }
 }
 
 function showDailyVerse(verses) {

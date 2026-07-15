@@ -30,16 +30,23 @@
 <section class="hero">
   <div class="hero-slides" id="heroSlides"></div>
   <div class="hero-overlay"></div>
-  <div class="hero-inner">
-    <p class="hero-eyebrow" data-bind="hero.pretitle">하나님의 말씀을 <span class="accent" data-bind="hero.pretitle_accent">곱씹다</span></p>
-    <h1 class="hero-title">빛나는교회</h1>
-    <p class="hero-verse"><span data-bind="hero.verse_line1"></span> <span data-bind="hero.verse_line2"></span></p>
-    <p class="hero-ref" data-bind="hero.reference"></p>
-    <div class="hero-cta">
-      <a href="#sermon" class="btn btn-primary">설교 영상 보기</a>
-      <a href="#visit" class="btn btn-ghost">오시는길</a>
+  <div class="container hero-container">
+    <div class="hero-inner">
+      <p class="hero-eyebrow" data-bind="hero.pretitle">하나님의 말씀을 <span class="accent" data-bind="hero.pretitle_accent">곱씹다</span></p>
+      <h1 class="hero-title">빛나는교회</h1>
+      <p class="hero-verse"><span data-bind="hero.verse_line1"></span> <span data-bind="hero.verse_line2"></span></p>
+      <p class="hero-ref" data-bind="hero.reference"></p>
+      <div class="hero-cta">
+        <a href="#sermon" class="btn btn-primary">설교 영상 보기</a>
+        <a href="#visit" class="btn btn-ghost">오시는길</a>
+      </div>
     </div>
   </div>
+  <button type="button" class="hero-nav hero-nav--prev" id="heroPrev" aria-label="이전 사진" hidden>‹</button>
+  <button type="button" class="hero-nav hero-nav--next" id="heroNext" aria-label="다음 사진" hidden>›</button>
+  <svg class="hero-wave" viewBox="0 0 1440 100" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0,45 C360,115 1080,-25 1440,45 L1440,100 L0,100 Z"></path>
+  </svg>
 </section>
 
 <section class="quicklinks">
