@@ -85,3 +85,28 @@ create policy "admins can update sermons" on sermons
 
 create policy "admins can delete sermons" on sermons
   for delete using (is_admin());
+
+-- ============================================================
+-- 커뮤니티 게시판(가정 및 구역 예배 등) — 누구나 읽기, 로그인한 회원 누구나 글쓰기,
+-- 삭제는 글쓴이 본인 또는 관리자만 가능
+-- ============================================================
+create table if not exists community_posts (
+  id uuid primary key default gen_random_uuid(),
+  board text not null default 'community-home',
+  author_id uuid references auth.users on delete set null,
+  author_name text not null,
+  title text not null,
+  body text not null,
+  created_at timestamptz default now()
+);
+
+alter table community_posts enable row level security;
+
+create policy "anyone can read community posts" on community_posts
+  for select using (true);
+
+create policy "members can insert own posts" on community_posts
+  for insert with check (auth.uid() = author_id);
+
+create policy "author or admin can delete posts" on community_posts
+  for delete using (auth.uid() = author_id or is_admin());

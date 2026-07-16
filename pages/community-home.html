@@ -24,6 +24,16 @@
   <p>나. 초대교회 뿐 아니라 거의 모든 교회가 가정교회 형태로 시작했습니다.</p>
   <p>다. 가정을 중심으로 교회를 이루고 교회의 역할 — 예배, 교제, 선교 — 을 감당함으로 역동적인 선교를 감당합니다.</p>
   <p>라. 가정교회들이 서로 연합(Network)을 이루어 건강한 지역교회를 세웁니다.</p>
+
+  <div class="community-board">
+    <h3 style="color:var(--navy);margin-bottom:6px;">이야기 나누기</h3>
+    <p style="color:var(--text-gray);font-size:14px;margin-bottom:20px;">가정교회·구역예배에서 나눈 은혜와 소식을 성도님들이 자유롭게 나누는 공간입니다.</p>
+
+    <div id="communityWriteArea"></div>
+
+    <ul class="community-post-list" id="communityPostList"></ul>
+    <p class="community-empty" id="communityEmpty" hidden>아직 등록된 글이 없습니다. 첫 글을 남겨보세요!</p>
+  </div>
 </div>
 
 <div id="footerHost"></div>
@@ -31,6 +41,89 @@
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
 <script src="/common.js"></script>
+<script src="/community-data.js"></script>
+<script>
+const BOARD = "community-home";
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
+async function loadCommunityPosts(profile) {
+  const listEl = document.getElementById('communityPostList');
+  const emptyEl = document.getElementById('communityEmpty');
+  const posts = await fetchCommunityPosts(BOARD);
+  if (posts.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+  listEl.innerHTML = posts.map(p => {
+    const canDelete = profile && (profile.id === p.author_id || profile.is_admin);
+    return `
+    <li class="community-post">
+      <div class="community-post-head">
+        <span class="community-post-title">${esc(p.title)}</span>
+        ${canDelete ? `<button type="button" class="community-post-delete" data-id="${p.id}">삭제</button>` : ''}
+      </div>
+      <p class="community-post-body">${esc(p.body).replace(/\n/g, '<br>')}</p>
+      <p class="community-post-meta">${esc(p.author_name)} · ${(p.created_at || '').slice(0, 10)}</p>
+    </li>`;
+  }).join('');
+
+  listEl.querySelectorAll('[data-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('이 글을 삭제할까요?')) return;
+      try {
+        await deleteCommunityPost(btn.dataset.id);
+        await loadCommunityPosts(profile);
+      } catch (err) {
+        alert('삭제 중 오류가 발생했습니다: ' + err.message);
+      }
+    });
+  });
+}
+
+function renderWriteArea(profile) {
+  const area = document.getElementById('communityWriteArea');
+  if (!profile) {
+    area.innerHTML = `<p class="community-login-prompt"><a href="/pages/login.html">로그인</a> 후 글을 쓸 수 있습니다.</p>`;
+    return;
+  }
+  area.innerHTML = `
+    <form id="communityForm" class="community-form">
+      <input type="text" id="cTitle" placeholder="제목" required>
+      <textarea id="cBody" rows="4" placeholder="나누고 싶은 이야기를 적어주세요." required></textarea>
+      <button type="submit" class="btn btn-primary btn-sm">글쓰기</button>
+      <p class="auth-error" id="communityFormError" hidden></p>
+    </form>`;
+
+  document.getElementById('communityForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('communityFormError');
+    errorEl.hidden = true;
+    try {
+      await createCommunityPost({
+        board: BOARD,
+        author_id: profile.id,
+        author_name: profile.name,
+        title: document.getElementById('cTitle').value.trim(),
+        body: document.getElementById('cBody').value.trim(),
+      });
+      document.getElementById('communityForm').reset();
+      await loadCommunityPosts(profile);
+    } catch (err) {
+      errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
+      errorEl.hidden = false;
+    }
+  });
+}
+
+async function initCommunityBoard() {
+  const profile = await getCurrentProfile();
+  renderWriteArea(profile);
+  await loadCommunityPosts(profile);
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initCommunityBoard, 400));
+</script>
 </body>
 </html>
