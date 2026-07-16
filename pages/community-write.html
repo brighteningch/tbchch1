@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>글쓰기 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">COMMUNITY & 양육</span>
+  <h1>이야기 나누기 · 글쓰기</h1>
+  <p>가정 및 구역 예배에서 나눈 은혜와 소식을 적어주세요.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:700px;">
+  <div id="writeGuard" class="admin-guard" hidden>
+    <p>로그인 후 글을 쓸 수 있습니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <form id="communityForm" class="community-form" hidden>
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:600;">제목
+      <input type="text" id="cTitle" placeholder="제목을 입력해주세요" required>
+    </label>
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:600;">내용
+      <textarea id="cBody" rows="10" placeholder="나누고 싶은 이야기를 적어주세요." required></textarea>
+    </label>
+    <div class="sermon-form-actions">
+      <button type="submit" class="btn btn-primary">등록하기</button>
+      <a href="/pages/community-home.html" class="btn btn-ghost">취소</a>
+    </div>
+    <p class="auth-error" id="communityFormError" hidden></p>
+  </form>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/community-data.js"></script>
+<script src="/common.js"></script>
+<script>
+const BOARD = "community-home";
+let __profile = null;
+
+async function initWritePage() {
+  __profile = await getCurrentProfile();
+  if (!__profile) {
+    document.getElementById('writeGuard').hidden = false;
+    return;
+  }
+  document.getElementById('communityForm').hidden = false;
+}
+
+document.getElementById('communityForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('communityFormError');
+  errorEl.hidden = true;
+  try {
+    await createCommunityPost({
+      board: BOARD,
+      author_id: __profile.id,
+      author_name: __profile.name,
+      title: document.getElementById('cTitle').value.trim(),
+      body: document.getElementById('cBody').value.trim(),
+    });
+    location.href = '/pages/community-home.html';
+  } catch (err) {
+    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initWritePage, 400));
+</script>
+</body>
+</html>

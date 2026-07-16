@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이야기 나누기 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">COMMUNITY & 양육</span>
+  <h1>이야기 나누기</h1>
+  <p>가정 및 구역 예배에서 나눈 이야기입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:700px;">
+  <div class="community-post-detail">
+    <h2 id="postTitle" class="sermon-view-title"></h2>
+    <p class="community-post-meta" id="postMeta"></p>
+    <div class="sermon-view-body" id="postBody"></div>
+    <div class="sermon-form-actions" style="margin-top:24px;">
+      <a href="/pages/community-home.html" class="btn btn-ghost">목록으로</a>
+      <button type="button" class="btn btn-ghost" id="postDeleteBtn" hidden>삭제</button>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/community-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+const params = new URLSearchParams(location.search);
+const idParam = params.get('id') || '';
+
+(async function () {
+  try {
+    const post = await fetchCommunityPostById(idParam);
+    document.getElementById('postTitle').textContent = post.title || '';
+    document.getElementById('postMeta').textContent = `${post.author_name} · ${(post.created_at || '').slice(0, 10)}`;
+    document.getElementById('postBody').innerHTML = esc(post.body).replace(/\n/g, '<br>');
+
+    const profile = await getCurrentProfile();
+    if (profile && (profile.id === post.author_id || profile.is_admin)) {
+      const delBtn = document.getElementById('postDeleteBtn');
+      delBtn.hidden = false;
+      delBtn.addEventListener('click', async () => {
+        if (!confirm('이 글을 삭제할까요?')) return;
+        try {
+          await deleteCommunityPost(post.id);
+          location.href = '/pages/community-home.html';
+        } catch (err) {
+          alert('삭제 중 오류가 발생했습니다: ' + err.message);
+        }
+      });
+    }
+  } catch (err) {
+    document.getElementById('postTitle').textContent = '글을 찾을 수 없습니다.';
+  }
+})();
+</script>
+</body>
+</html>

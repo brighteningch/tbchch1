@@ -11,6 +11,14 @@ async function fetchCommunityPosts(board) {
   return data || [];
 }
 
+async function fetchCommunityPostById(id) {
+  const sb = getSupabaseClient();
+  if (!sb) return null;
+  const { data, error } = await sb.from("community_posts").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+
 async function createCommunityPost(payload) {
   const sb = requireSupabaseClient();
   const { data, error } = await sb.from("community_posts").insert(payload).select().single();
