@@ -1035,6 +1035,15 @@ section { padding: 88px 0; }
   .mission-inner { gap: 28px; }
   .mission-media-title { margin-bottom: 8px; }
   .worship-table th, .worship-table td { padding: 12px 14px; font-size: 13.5px; }
+  .worship-groups { gap: 12px; }
+  .worship-group-label { width: 56px; font-size: 15px; }
+  .worship-mini-table thead th { padding: 8px 8px; font-size: 11.5px; }
+  .worship-mini-table td { padding: 8px 8px; font-size: 13.5px; }
+  .qcard2 { padding: 14px; }
+  .qcard2-top { margin-bottom: 8px; }
+  .qcard2-icon { width: 32px; height: 32px; font-size: 15px; border-radius: 9px; }
+  .qcard2 h3 { font-size: 14.5px; margin-bottom: 3px; }
+  .qcard2 p { font-size: 11.5px; line-height: 1.3; }
   .gallery-cat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .gallery-cat-thumb { padding-top: 78%; }
   .gallery-cat-card > div:last-child { padding: 8px 10px 10px; }
