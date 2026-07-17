@@ -8,6 +8,8 @@ exports.handler = async function () {
     const res = await fetch(LIVE_PAGE_URL, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        "Cookie": "CONSENT=YES+1; SOCS=CAI",
       },
     });
     const html = await res.text();
@@ -25,7 +27,11 @@ exports.handler = async function () {
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=60",
       },
-      body: JSON.stringify({ live: isLive && !!videoId, videoId }),
+      body: JSON.stringify({
+        live: isLive && !!videoId,
+        videoId,
+        _debug: { status: res.status, len: html.length, hasConsent: /consent\.youtube\.com|Before you continue/i.test(html) },
+      }),
     };
   } catch (err) {
     return {
