@@ -53,6 +53,15 @@
   </div>
 </div>
 
+<!-- 찬양 듣기: 히어로 버튼 클릭 시 우측 하단에 뜨는 플로팅 플레이어 -->
+<div id="praisePlayer" class="praise-player" hidden>
+  <div class="praise-player-head">
+    <span>🎵 찬양</span>
+    <button type="button" id="praisePlayerClose" aria-label="닫기" onclick="togglePraisePlayer(false)">✕</button>
+  </div>
+  <div class="praise-player-frame" id="praisePlayerFrame"></div>
+</div>
+
 <div id="headerHost"></div>
 
 <section class="hero">
@@ -67,6 +76,7 @@
       <div class="hero-cta">
         <a href="#sermon" class="btn btn-primary">설교 영상 보기</a>
         <a href="#visit" class="btn btn-ghost">오시는길</a>
+        <button type="button" id="playPraiseBtn" class="btn btn-ghost" onclick="togglePraisePlayer()">🎵 찬양 듣기</button>
       </div>
     </div>
   </div>

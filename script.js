@@ -175,6 +175,21 @@ function showSundayPopup() {
 }
 showSundayPopup();
 
+// 찬양 듣기 플로팅 플레이어 (고정곡 1곡, 히어로 버튼 클릭 시 재생)
+const PRAISE_YOUTUBE_ID = 'rlgvUfQAsAo';
+function togglePraisePlayer(forceOpen) {
+  const player = document.getElementById('praisePlayer');
+  const frame = document.getElementById('praisePlayerFrame');
+  const open = forceOpen !== undefined ? forceOpen : player.hidden;
+  if (open) {
+    frame.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${PRAISE_YOUTUBE_ID}?autoplay=1" title="찬양" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+    player.hidden = false;
+  } else {
+    frame.innerHTML = ''; // iframe 제거로 재생 정지
+    player.hidden = true;
+  }
+}
+
 fetch('/content/notices.json')
   .then(res => res.json())
   .then(data => {
