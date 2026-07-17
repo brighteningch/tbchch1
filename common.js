@@ -233,7 +233,9 @@ function initScrollTopButton() {
 
   window.addEventListener('scroll', () => {
     btn.classList.toggle('visible', window.scrollY > 400);
+    repositionForViewport();
   });
+  window.addEventListener('resize', repositionForViewport);
 
   btn.addEventListener('click', () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
