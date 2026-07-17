@@ -45,23 +45,10 @@ function loadGallery(catGridId) {
     });
 }
 
-function renderParagraphs(container, text) {
-  container.innerHTML = '';
-  text.split('\n\n').forEach(block => {
-    if (!block.trim()) return;
-    const p = document.createElement('p');
-    p.innerHTML = block.replace(/\n/g, '<br>');
-    container.appendChild(p);
-  });
-}
-
 fetch('/content/site.json')
   .then(res => res.json())
   .then(data => {
     applyBindings(document, data);
-
-    // 인사말 본문 (문단 나누기)
-    renderParagraphs(document.getElementById('about-message'), data.about.message);
 
     // 예배안내 테이블
     const worshipTbody = document.getElementById('worship-tbody');

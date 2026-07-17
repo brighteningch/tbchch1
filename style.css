@@ -565,33 +565,19 @@ section { padding: 88px 0; }
   margin-bottom: 30px;
   letter-spacing: -0.5px;
 }
-.about .section-title, .worship .section-title, .sermon .section-title,
+.mission .section-title, .worship .section-title, .sermon .section-title,
 .gallery .section-title, .notice .section-title, .offering .section-title, .visit .section-title {
   text-align: center;
 }
-.about .eyebrow, .worship .eyebrow, .sermon .eyebrow,
+.mission .eyebrow, .worship .eyebrow, .sermon .eyebrow,
 .gallery .eyebrow, .notice .eyebrow, .offering .eyebrow, .visit .eyebrow {
   text-align: center;
 }
 
-/* About */
-.about { background: #fff; }
-.about-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 40px;
-  align-items: start;
-  text-align: left;
-}
-.about-message p { margin-bottom: 14px; color: #333; font-size: 15px; }
-.about-side {
-  background: var(--bg-warm);
-  border-radius: 16px;
-  padding: 28px;
-}
-.about-highlight { font-size: 18px; font-weight: 700; color: var(--navy); margin-bottom: 16px; }
-.about-lead { font-size: 14px; color: var(--text-gray); margin-bottom: 6px; }
-.about-signature { font-size: 13px; color: var(--text-gray); }
+/* Mission statement */
+.mission { background: #fff; }
+.mission-inner { text-align: center; }
+.mission-text { font-size: 16px; line-height: 1.9; color: var(--text-gray); }
 
 /* Worship table */
 .worship { background: var(--bg-cool); }
