@@ -529,6 +529,25 @@ body {
 .qb-schedule { background: #fbe4a8; color: #7a5b00; }
 .qb-youtube { background: #fddede; color: #d5303f; }
 .qb-insta { background: rgba(255,255,255,0.28); color: #fff; }
+.qb-live {
+  background: #e5142a;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.qb-live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  animation: liveDotPulse 1.4s ease-in-out infinite;
+}
+@keyframes liveDotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
 .qcard2 h3 { font-size: 16.5px; margin-bottom: 6px; }
 .qcard2 p { font-size: 13px; color: var(--text-gray); line-height: 1.55; }
 

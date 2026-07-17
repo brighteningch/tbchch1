@@ -157,6 +157,36 @@ function showSundayPopup() {
 }
 showSundayPopup();
 
+// 유튜브 실시간 방송 여부 확인 (30초마다 재확인, 방송 중이면 빨간 LIVE 배지 표시)
+const YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/channel/UCFEmEydneJGmF5DN9UYeTmA';
+const YOUTUBE_DEFAULT_DESC = '주일 대예배 실시간 스트리밍 시청 및 지난 아카이브 보기.';
+
+async function checkYoutubeLive() {
+  const card = document.getElementById('qcardYoutube');
+  if (!card) return;
+  try {
+    const res = await fetch('/.netlify/functions/youtube-live-check');
+    const data = await res.json();
+    const badge = card.querySelector('.qcard2-badge');
+    const desc = card.querySelector('p');
+    if (data.live && data.videoId) {
+      badge.textContent = 'LIVE';
+      badge.classList.add('qb-live');
+      card.href = `https://www.youtube.com/watch?v=${data.videoId}`;
+      if (desc) desc.textContent = '지금 실시간으로 예배가 진행 중입니다. 클릭해서 바로 시청하세요.';
+    } else {
+      badge.textContent = 'YOUTUBE';
+      badge.classList.remove('qb-live');
+      card.href = YOUTUBE_CHANNEL_URL;
+      if (desc) desc.textContent = YOUTUBE_DEFAULT_DESC;
+    }
+  } catch (err) {
+    console.error('유튜브 실시간 상태 확인 실패:', err);
+  }
+}
+checkYoutubeLive();
+setInterval(checkYoutubeLive, 30000);
+
 // 말씀과 찬양 캐러셀 (주일설교 메인 + 수요설교/금요설교/수요찬양)
 const SHOWCASE_LABELS = {
   'sermon-sunday': '주일설교',
