@@ -28,22 +28,16 @@
       <a href="/pages/prayer-request-write.html" class="btn btn-primary btn-sm">기도 요청하기</a>
     </div>
 
-    <div id="readGuard" class="admin-guard" hidden>
-      <p>로그인한 성도님만 기도요청 목록을 볼 수 있습니다.</p>
-      <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 또는 <a href="/pages/signup.html">회원가입</a> 후 다시 열어주세요.</p>
+    <div class="community-table-wrap">
+      <table class="community-table">
+        <thead>
+          <tr><th>번호</th><th>제목</th><th>작성자</th><th>날짜</th></tr>
+        </thead>
+        <tbody id="communityTbody"></tbody>
+      </table>
     </div>
-    <div id="communityListWrap" hidden>
-      <div class="community-table-wrap">
-        <table class="community-table">
-          <thead>
-            <tr><th>번호</th><th>제목</th><th>작성자</th><th>날짜</th></tr>
-          </thead>
-          <tbody id="communityTbody"></tbody>
-        </table>
-      </div>
-      <div id="communityPagination"></div>
-      <p class="community-empty" id="communityEmpty" hidden>아직 등록된 기도요청이 없습니다. 첫 기도 제목을 나눠주세요.</p>
-    </div>
+    <div id="communityPagination"></div>
+    <p class="community-empty" id="communityEmpty" hidden>아직 등록된 기도요청이 없습니다. 첫 기도 제목을 나눠주세요.</p>
   </div>
 </div>
 
@@ -76,16 +70,9 @@ function renderCommunityRows(page) {
 }
 
 async function loadCommunityList() {
-  const profile = await getCurrentProfile();
-  if (!profile) {
-    document.getElementById('readGuard').hidden = false;
-    return;
-  }
-  document.getElementById('communityListWrap').hidden = false;
-
   const tbody = document.getElementById('communityTbody');
   const emptyEl = document.getElementById('communityEmpty');
-  communityPosts = await fetchCommunityPosts(BOARD);
+  communityPosts = await fetchCommunityPostsList(BOARD);
   if (communityPosts.length === 0) {
     tbody.innerHTML = '';
     emptyEl.hidden = false;
