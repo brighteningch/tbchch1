@@ -1025,12 +1025,15 @@ section { padding: 88px 0; }
   .mm-panel a { padding: 10px 6px; }
   .nav-toggle { display: flex; }
   .header-inner .btn-sm { display: none; }
-  .hero { padding: 100px 0 100px; }
-  .hero-title { font-size: 42px; }
-  .hero-eyebrow { font-size: 15px; }
-  .quicklinks { margin-top: -40px; }
-  .section-title { font-size: 24px; }
-  section { padding: 56px 0; }
+  .hero { padding: 64px 0 56px; }
+  .hero-title { font-size: 38px; }
+  .hero-eyebrow { font-size: 14px; }
+  .hero-verse { font-size: 15px; }
+  .quicklinks { margin-top: -28px; }
+  .section-title { font-size: 22px; margin-bottom: 18px; }
+  section { padding: 36px 0; }
+  .mission-inner { gap: 28px; }
+  .mission-media-title { margin-bottom: 8px; }
   .worship-table th, .worship-table td { padding: 12px 14px; font-size: 13.5px; }
 }
 
