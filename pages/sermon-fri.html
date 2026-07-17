@@ -47,6 +47,7 @@
           <tbody id="sermon-tbody" data-category="sermon-fri"></tbody>
         </table>
       </div>
+      <div id="sermon-pagination"></div>
       <p class="sermon-empty" id="sermon-empty" hidden>아직 등록된 말씀이 없습니다.</p>
     </div>
   </div>
@@ -60,26 +61,22 @@
 <script src="/sermons-data.js"></script>
 <script>
 function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const SERMON_PER_PAGE = 15;
 (async function () {
   const tbody = document.getElementById('sermon-tbody');
+  const paginationEl = document.getElementById('sermon-pagination');
   const category = tbody.dataset.category;
-  try {
-    const profile = await getCurrentProfile();
-    if (profile && profile.is_admin) {
-      const writeBtn = document.getElementById('sermonWriteBtn');
-      writeBtn.hidden = false;
-      writeBtn.href = `/pages/admin-sermons.html?category=${encodeURIComponent(category)}`;
-    }
-    const items = await fetchSermons(category);
-    if (items.length === 0) {
-      document.getElementById('sermon-empty').hidden = false;
-      return;
-    }
-    tbody.innerHTML = items.map((s, i) => {
+  let items = [];
+
+  function renderRows(page) {
+    const start = (page - 1) * SERMON_PER_PAGE;
+    const pageItems = items.slice(start, start + SERMON_PER_PAGE);
+    tbody.innerHTML = pageItems.map((s, i) => {
       const link = `/pages/sermon-view.html?id=${encodeURIComponent(s.id)}`;
+      const num = items.length - (start + i);
       return `
       <tr>
-        <td>${items.length - i}</td>
+        <td>${num}</td>
         <td class="sermon-title"><a href="${link}">${escHtml(s.title)}</a></td>
         <td>${escHtml(s.scripture || '')}</td>
         <td>${escHtml(s.speaker || '')}</td>
@@ -87,6 +84,22 @@ function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(
         <td>${s.video_url ? `<a href="${link}" class="sermon-watch" aria-label="영상보기">▶</a>` : ''}</td>
       </tr>`;
     }).join('');
+    renderPagination(paginationEl, items.length, SERMON_PER_PAGE, page, renderRows);
+  }
+
+  try {
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) {
+      const writeBtn = document.getElementById('sermonWriteBtn');
+      writeBtn.hidden = false;
+      writeBtn.href = `/pages/admin-sermons.html?category=${encodeURIComponent(category)}`;
+    }
+    items = await fetchSermons(category);
+    if (items.length === 0) {
+      document.getElementById('sermon-empty').hidden = false;
+      return;
+    }
+    renderRows(1);
   } catch (err) {
     document.getElementById('sermon-empty').hidden = false;
   }

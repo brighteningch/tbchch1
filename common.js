@@ -119,6 +119,29 @@ function openCategoryLightbox(categoryId, categoryName) {
     });
 }
 
+// 목록형 페이지 공통 페이지네이션(15개 단위). 게시판/설교 목록 모두 재사용.
+function renderPagination(container, totalItems, perPage, currentPage, onPageChange) {
+  if (!container) return;
+  const totalPages = Math.ceil(totalItems / perPage);
+  if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+  let html = '<nav class="pagination" aria-label="페이지 이동">';
+  html += `<button type="button" class="page-nav" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''} aria-label="이전 페이지">‹</button>`;
+  for (let p = 1; p <= totalPages; p++) {
+    html += `<button type="button" class="page-num${p === currentPage ? ' active' : ''}" data-page="${p}"${p === currentPage ? ' aria-current="page"' : ''}>${p}</button>`;
+  }
+  html += `<button type="button" class="page-nav" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''} aria-label="다음 페이지">›</button>`;
+  html += '</nav>';
+  container.innerHTML = html;
+
+  container.querySelectorAll('[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = Number(btn.dataset.page);
+      if (p >= 1 && p <= totalPages && p !== currentPage) onPageChange(p);
+    });
+  });
+}
+
 function initMobileNav() {
   const navToggle = document.getElementById('navToggle');
   const nav = document.getElementById('nav');

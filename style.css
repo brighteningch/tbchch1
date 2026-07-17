@@ -1130,6 +1130,16 @@ section { padding: 88px 0; }
   .sermon-form-row { grid-template-columns: 1fr; }
 }
 
+/* ---------- 목록 페이지네이션 (설교/게시판 공통) ---------- */
+.pagination { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 20px; flex-wrap: wrap; }
+.pagination .page-num, .pagination .page-nav {
+  min-width: 36px; height: 36px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-light);
+  background: #fff; color: var(--text-dark); font-size: 14px; cursor: pointer; transition: all .15s ease;
+}
+.pagination .page-num:hover, .pagination .page-nav:hover:not(:disabled) { border-color: var(--navy); color: var(--navy); }
+.pagination .page-num.active { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 600; }
+.pagination .page-nav:disabled { opacity: 0.35; cursor: default; }
+
 /* ---------- 커뮤니티 게시판 (가정 및 구역 예배 등) ---------- */
 .community-board { margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--border-light); }
 .community-board-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
