@@ -164,6 +164,7 @@ const SHOWCASE_LABELS = {
   'sermon-fri': '금요설교',
   'praise-wed': '수요찬양',
   'praise-fri': '금요찬양',
+  '3min': '3분영상',
 };
 
 function showcaseEsc(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
@@ -190,6 +191,32 @@ function showcaseCard(item, isMain) {
       </div>
     </a>`;
 }
+
+// 미션 스테이트먼트 영역의 3분영상 (최신 1건 인라인 재생)
+function youtubeEmbedUrl(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
+  return m ? `https://www.youtube.com/embed/${m[1]}` : null;
+}
+
+async function loadMissionVideo() {
+  const el = document.getElementById('mission-media');
+  if (!el) return;
+  try {
+    const items = await fetchSermons('3min');
+    const latest = items[0];
+    const embedUrl = latest && youtubeEmbedUrl(latest.video_url);
+    if (embedUrl) {
+      el.innerHTML = `<iframe src="${embedUrl}" title="${showcaseEsc(latest.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+    } else {
+      el.innerHTML = '<div class="mission-media-empty">3분영상이 곧 올라올 예정입니다.</div>';
+    }
+  } catch (err) {
+    console.error('3분영상 로드 실패:', err);
+    el.innerHTML = '<div class="mission-media-empty">3분영상이 곧 올라올 예정입니다.</div>';
+  }
+}
+loadMissionVideo();
 
 async function loadShowcase() {
   try {
