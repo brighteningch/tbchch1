@@ -1035,6 +1035,14 @@ section { padding: 88px 0; }
   .mission-inner { gap: 28px; }
   .mission-media-title { margin-bottom: 8px; }
   .worship-table th, .worship-table td { padding: 12px 14px; font-size: 13.5px; }
+  .gallery-cat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .gallery-cat-thumb { padding-top: 78%; }
+  .gallery-cat-card > div:last-child { padding: 8px 10px 10px; }
+  .gallery-cat-name { font-size: 13.5px; margin-bottom: 2px; }
+  .gallery-cat-label { font-size: 10px; }
+  .gallery-cat-date { font-size: 11px; }
+  .gallery-desc { margin-bottom: 16px; }
+  #kakaoMap { height: 260px !important; }
 }
 
 /* ---------- 로그인/회원가입 폼 ---------- */
