@@ -215,6 +215,22 @@ function initScrollTopButton() {
     <span>맨위로</span>`;
   document.body.appendChild(btn);
 
+  // 모바일 브라우저는 주소창 높이만큼 layout viewport(window.innerHeight)가
+  // 실제 보이는 visual viewport보다 커서, 단순 bottom:16px만 쓰면 버튼이
+  // 화면 아래로 밀려 잘리거나 눌리지 않는 경우가 있다. visualViewport 기준으로
+  // 여백을 보정해 항상 실제 보이는 영역 안에 뜨게 한다.
+  function repositionForViewport() {
+    if (!window.visualViewport) return;
+    const vv = window.visualViewport;
+    const hiddenBelow = window.innerHeight - (vv.height + vv.offsetTop);
+    btn.style.bottom = `calc(16px + ${Math.max(0, hiddenBelow)}px)`;
+  }
+  repositionForViewport();
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', repositionForViewport);
+    window.visualViewport.addEventListener('scroll', repositionForViewport);
+  }
+
   window.addEventListener('scroll', () => {
     btn.classList.toggle('visible', window.scrollY > 400);
   });
