@@ -22,14 +22,14 @@
     "signature": "김제희 목사와 성도 일동"
   },
   "worship": [
-    { "name": "주일예배 1부", "time": "오전 9:10" },
-    { "name": "주일예배 2부", "time": "오전 11:00" },
-    { "name": "주일 오후예배", "time": "오후 1:30" },
-    { "name": "어린이예배", "time": "오전 10:40" },
-    { "name": "청소년예배", "time": "오전 10:20" },
-    { "name": "수요예배", "time": "수요일 오후 7:30" },
-    { "name": "금요예배", "time": "금요일 오후 8:00" },
-    { "name": "새벽기도", "time": "월~금 오전 5:00" }
+    { "category": "주일예배", "name": "주일예배 1부", "time": "오전 9:10" },
+    { "category": "주일예배", "name": "주일예배 2부", "time": "오전 11:00" },
+    { "category": "주일예배", "name": "주일 오후예배", "time": "오후 1:30" },
+    { "category": "교회학교", "name": "어린이예배", "time": "오전 10:40" },
+    { "category": "교회학교", "name": "청소년예배", "time": "오전 10:20" },
+    { "category": "주중예배", "name": "수요예배", "time": "수요일 오후 7:30" },
+    { "category": "주중예배", "name": "금요예배", "time": "금요일 오후 8:00" },
+    { "category": "주중예배", "name": "새벽기도", "time": "월~금 오전 5:00" }
   ],
   "sermon": {
     "youtube_channel_url": "https://www.youtube.com/channel/UCFEmEydneJGmF5DN9UYeTmA",

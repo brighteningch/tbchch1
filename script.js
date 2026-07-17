@@ -50,14 +50,26 @@ fetch('/content/site.json')
   .then(data => {
     applyBindings(document, data);
 
-    // 예배안내 테이블
-    const worshipTbody = document.getElementById('worship-tbody');
-    worshipTbody.innerHTML = '';
-    data.worship.forEach(item => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${item.name}</td><td>${item.time}</td>`;
-      worshipTbody.appendChild(tr);
-    });
+    // 예배안내: 주일예배/교회학교/주중예배 3개 컬러 그룹 카드
+    const WORSHIP_GROUPS = [
+      { key: '주일예배', cls: 'wg-sunday' },
+      { key: '교회학교', cls: 'wg-kids' },
+      { key: '주중예배', cls: 'wg-week' },
+    ];
+    document.getElementById('worship-groups').innerHTML = WORSHIP_GROUPS.map(g => {
+      const items = data.worship.filter(w => w.category === g.key);
+      if (items.length === 0) return '';
+      return `
+        <div class="worship-group ${g.cls}">
+          <div class="worship-group-label">${g.key.slice(0, 2)}<br>${g.key.slice(2)}</div>
+          <table class="worship-mini-table">
+            <thead><tr><th>예배</th><th>시간</th></tr></thead>
+            <tbody>
+              ${items.map(w => `<tr><td>${w.name}</td><td>${w.time}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }).join('');
 
     // 빠른링크 예배시간 요약(1부/2부만)
     const w1 = data.worship[0], w2 = data.worship[1];
