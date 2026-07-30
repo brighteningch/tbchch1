@@ -50,29 +50,27 @@ fetch('/content/site.json')
   .then(data => {
     applyBindings(document, data);
 
-    // 예배안내: 주일예배 카드 + (주중예배·교회학교를 세로로 묶은 카드) 2칸 구성 — 한 줄 배치
+    // 예배안내: 주일예배→주중예배→교회학교 순서로 표 하나에 병합, 카테고리는 rowspan으로 묶어 표시(한 줄 표)
     const WORSHIP_GROUPS = [
       { key: '주일예배', cls: 'wg-sunday' },
       { key: '주중예배', cls: 'wg-week' },
       { key: '교회학교', cls: 'wg-kids' },
     ];
-    const worshipGroupCard = g => {
-      const items = data.worship.filter(w => w.category === g.key);
-      if (items.length === 0) return '';
-      return `
-        <div class="worship-group ${g.cls}">
-          <div class="worship-group-label">${g.key.slice(0, 2)}<br>${g.key.slice(2)}</div>
-          <table class="worship-mini-table">
-            <thead><tr><th>예배</th><th>시간</th><th>장소</th></tr></thead>
-            <tbody>
-              ${items.map(w => `<tr><td>${w.name}</td><td>${w.time}</td><td>${w.location || '본당'}</td></tr>`).join('')}
-            </tbody>
-          </table>
-        </div>`;
-    };
-    const [sundayGroup, weekGroup, kidsGroup] = WORSHIP_GROUPS.map(worshipGroupCard);
-    document.getElementById('worship-groups').innerHTML =
-      sundayGroup + `<div class="worship-col">${weekGroup}${kidsGroup}</div>`;
+    const groups = WORSHIP_GROUPS
+      .map(g => ({ ...g, items: data.worship.filter(w => w.category === g.key) }))
+      .filter(g => g.items.length > 0);
+    const bodyRows = groups.map(g => g.items.map((w, i) => `
+        <tr>
+          ${i === 0 ? `<td class="worship-cat ${g.cls}" rowspan="${g.items.length}">${g.key.slice(0, 2)}<br>${g.key.slice(2)}</td>` : ''}
+          <td>${w.name}</td><td>${w.time}</td><td>${w.location || '본당'}</td>
+        </tr>`).join('')).join('');
+    document.getElementById('worship-groups').innerHTML = `
+      <div class="worship-table-wrap">
+        <table class="worship-table worship-unified">
+          <thead><tr><th></th><th>예배</th><th>시간</th><th>장소</th></tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>`;
 
     // 빠른링크 예배시간 요약(1부/2부만)
     const w1 = data.worship[0], w2 = data.worship[1];
@@ -263,35 +261,45 @@ async function loadMissionVideo() {
 }
 loadMissionVideo();
 
-async function loadShowcase() {
+// 말씀과 찬양 캐러셀: 탭(주일예배/수요예배/금요예배) 선택 시 해당 카테고리 최근 4개를 보여준다
+const SHOWCASE_TABS = [
+  { label: '주일예배', category: 'sermon-sunday' },
+  { label: '수요예배', category: 'sermon-wed' },
+  { label: '금요예배', category: 'sermon-fri' },
+];
+
+async function renderShowcaseRow(category) {
+  const row = document.getElementById('showcase-row');
+  row.innerHTML = '<p class="showcase-empty">불러오는 중…</p>';
   try {
-    const [sunday, wed, fri, praiseWed] = await Promise.all([
-      fetchSermons('sermon-sunday'),
-      fetchSermons('sermon-wed'),
-      fetchSermons('sermon-fri'),
-      fetchSermons('praise-wed'),
-    ]);
-
-    const mainItems = sunday.slice(0, 2);
-    const mainEl = document.getElementById('showcase-main');
-    mainEl.classList.toggle('showcase-main--single', mainItems.length === 1);
-    mainEl.innerHTML = mainItems.length
-      ? mainItems.map(item => showcaseCard(item, true)).join('')
-      : '<p class="showcase-empty">아직 등록된 주일설교가 없습니다.</p>';
-
-    const rowItems = [wed[0], fri[0], praiseWed[0]].filter(Boolean);
-    const rowWrap = document.querySelector('.showcase-row-wrap');
-    if (rowItems.length === 0) {
-      rowWrap.hidden = true;
-    } else {
-      const row = document.getElementById('showcase-row');
-      row.innerHTML = rowItems.map(item => showcaseCard(item, false)).join('');
-      document.getElementById('showcasePrev').addEventListener('click', () => row.scrollBy({ left: -300, behavior: 'smooth' }));
-      document.getElementById('showcaseNext').addEventListener('click', () => row.scrollBy({ left: 300, behavior: 'smooth' }));
-    }
+    const items = (await fetchSermons(category)).slice(0, 4);
+    row.innerHTML = items.length
+      ? items.map(item => showcaseCard(item, false)).join('')
+      : '<p class="showcase-empty">아직 등록된 설교가 없습니다.</p>';
   } catch (err) {
     console.error('말씀과 찬양 로드 실패:', err);
+    row.innerHTML = '<p class="showcase-empty">불러오지 못했습니다.</p>';
   }
+}
+
+function loadShowcase() {
+  const tabsEl = document.getElementById('showcase-tabs');
+  tabsEl.innerHTML = SHOWCASE_TABS.map((t, i) => `
+    <button type="button" class="showcase-tab${i === 0 ? ' is-active' : ''}" data-category="${t.category}">${t.label}</button>`).join('');
+  tabsEl.querySelectorAll('.showcase-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('is-active')) return;
+      tabsEl.querySelectorAll('.showcase-tab').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      document.getElementById('showcase-row').scrollTo({ left: 0 });
+      renderShowcaseRow(btn.dataset.category);
+    });
+  });
+  document.getElementById('showcasePrev').addEventListener('click', () =>
+    document.getElementById('showcase-row').scrollBy({ left: -300, behavior: 'smooth' }));
+  document.getElementById('showcaseNext').addEventListener('click', () =>
+    document.getElementById('showcase-row').scrollBy({ left: 300, behavior: 'smooth' }));
+  renderShowcaseRow(SHOWCASE_TABS[0].category);
 }
 loadShowcase();
 

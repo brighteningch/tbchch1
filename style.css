@@ -684,65 +684,35 @@ section { padding: 88px 0; }
 .worship-table td:first-child { font-weight: 700; color: var(--navy); }
 .worship-table td:first-child::before { content: "● "; color: var(--green); font-size: 10px; }
 
-/* 예배안내 컬러 그룹 카드 (주일예배/교회학교/주중예배) */
-.worship-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(390px, 1fr));
-  gap: 20px;
+/* 예배안내: 주일예배→주중예배→교회학교 순서로 병합한 표 하나(한 줄), 카테고리는 rowspan으로 묶어 표시 */
+.worship-groups { width: 100%; }
+.worship-unified th:first-child, .worship-unified td.worship-cat { width: 92px; }
+.worship-table.worship-unified td:first-child::before { content: none; }
+/* 가독성: 홈 첫 화면 표만 서체 확대 + 굵게 통일 + 가운데정렬 + 여백 축소(다른 페이지의 .worship-table엔 영향 없음) */
+.worship-table.worship-unified th {
+  font-size: 15px;
+  text-align: center;
+  padding: 12px 16px;
 }
-.worship-col {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+.worship-table.worship-unified td {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--navy);
+  text-align: center;
+  padding: 12px 16px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
-.worship-group {
-  display: flex;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(15, 40, 70, 0.08);
-  background: #fff;
-}
-.worship-group-label {
-  flex-shrink: 0;
-  width: 76px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.worship-table.worship-unified td.worship-cat {
   text-align: center;
   color: #fff;
-  font-size: 19px;
   font-weight: 800;
+  font-size: 19px;
   line-height: 1.4;
 }
-.worship-mini-table { flex: 1; width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; }
-.worship-mini-table th:nth-child(1), .worship-mini-table td:nth-child(1) { width: 30%; }
-.worship-mini-table th:nth-child(2), .worship-mini-table td:nth-child(2) { width: 46%; }
-.worship-mini-table th:nth-child(3), .worship-mini-table td:nth-child(3) { width: 24%; }
-.worship-mini-table thead th {
-  text-align: left;
-  padding: 12px 10px;
-  font-size: 13px;
-  letter-spacing: 0.4px;
-  font-weight: 700;
-  color: #fff;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.worship-mini-table td {
-  padding: 13px 10px;
-  border-bottom: 1px solid var(--border-light);
-  font-size: 15.5px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.worship-mini-table td:nth-child(2) { font-weight: 800; color: var(--navy); }
-.worship-mini-table tr:last-child td { border-bottom: none; }
-.wg-sunday .worship-group-label, .wg-sunday .worship-mini-table thead { background: #2d6cc4; }
-.wg-kids .worship-group-label, .wg-kids .worship-mini-table thead { background: #e08e2d; }
-.wg-week .worship-group-label, .wg-week .worship-mini-table thead { background: #189b8e; }
+.worship-unified td.wg-sunday { background: #2d6cc4; }
+.worship-unified td.wg-week { background: #189b8e; }
+.worship-unified td.wg-kids { background: #e08e2d; }
 
 /* Sermon showcase (말씀과 찬양) */
 .sermon { background: #fff; }
@@ -812,19 +782,20 @@ section { padding: 88px 0; }
 .showcase-body p { font-size: 13px; color: var(--text-gray); }
 .showcase-empty { color: var(--text-gray); padding: 40px 0; text-align: center; }
 
-#showcase-main {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-bottom: 28px;
-  align-items: start;
+.showcase-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+.showcase-tab {
+  padding: 9px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: #fff;
+  color: var(--text-gray);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-#showcase-main .showcase-card--main h3 { font-size: 20px; }
-#showcase-main .showcase-card--main .showcase-body { padding: 20px 22px 24px; }
-#showcase-main.showcase-main--single { grid-template-columns: 1fr; max-width: 460px; }
-@media (max-width: 700px) {
-  #showcase-main { grid-template-columns: 1fr; }
-}
+.showcase-tab:hover { border-color: var(--green); }
+.showcase-tab.is-active { background: var(--green); border-color: var(--green); color: #fff; }
 
 .showcase-row-wrap { position: relative; }
 .showcase-row {
@@ -856,7 +827,6 @@ section { padding: 88px 0; }
 .showcase-nav--prev { left: -18px; }
 .showcase-nav--next { right: -18px; }
 @media (max-width: 860px) {
-  #showcase-main .showcase-card--main { grid-template-columns: 1fr; }
   .showcase-nav { display: none; }
 }
 
@@ -1038,26 +1008,19 @@ section { padding: 88px 0; }
   section { padding: 36px 0; }
   .mission-inner { gap: 28px; }
   .mission-media-title { margin-bottom: 8px; }
-  .worship-table th, .worship-table td { padding: 12px 14px; font-size: 13.5px; }
-  .worship-groups { gap: 12px; }
-  .worship-group-label { width: 56px; font-size: 15px; }
-  .worship-mini-table thead th { padding: 8px 6px; font-size: 11px; }
-  .worship-mini-table td { padding: 8px 6px; font-size: 12.5px; }
-  .worship-mini-table th:nth-child(1), .worship-mini-table td:nth-child(1) {
-    width: 40%; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25;
-  }
-  .worship-mini-table th:nth-child(2), .worship-mini-table td:nth-child(2) { width: 32%; }
-  .worship-mini-table th:nth-child(3), .worship-mini-table td:nth-child(3) { width: 28%; }
+  .worship-table th, .worship-table td { padding: 10px 8px; font-size: 12.5px; }
+  .worship-unified th:first-child, .worship-unified td.worship-cat { width: 56px; }
+  .worship-table.worship-unified th { font-size: 12.5px; }
+  .worship-table.worship-unified td { font-size: 14.5px; }
+  .worship-table.worship-unified td.worship-cat { font-size: 14.5px; }
   .qcard2 { padding: 12px; }
   .qcard2-top { margin-bottom: 6px; }
   .qcard2-icon { width: 28px; height: 28px; font-size: 13px; border-radius: 8px; }
   .qcard2-badge { font-size: 9px; padding: 3px 8px; }
   .qcard2 h3 { font-size: 13px; margin-bottom: 2px; }
   .qcard2 p { font-size: 10.5px; line-height: 1.25; }
-  #showcase-main { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
-  #showcase-main.showcase-main--single { grid-template-columns: 1fr; }
-  #showcase-main .showcase-card--main h3 { font-size: 13px; }
-  #showcase-main .showcase-card--main .showcase-body { padding: 10px 10px 12px; }
+  .showcase-tabs { gap: 6px; margin-bottom: 14px; }
+  .showcase-tab { padding: 7px 14px; font-size: 12.5px; }
   .showcase-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow: visible; }
   .showcase-row .showcase-card { flex: none; }
   .showcase-nav { display: none; }
