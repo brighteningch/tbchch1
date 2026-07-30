@@ -14,6 +14,7 @@
   .admin-tab-panel { display:none; }
   .admin-tab-panel.active { display:block; }
   .field-hint { font-size:12.5px; color:var(--text-gray); margin-top:-8px; }
+  .dl-thumb { width:64px; height:64px; object-fit:cover; border-radius:8px; display:block; }
 </style>
 </head>
 <body>
@@ -36,6 +37,7 @@
     <div class="admin-tabs">
       <button type="button" class="admin-tab active" data-tab="infographic">🎨 설교 인포그래픽</button>
       <button type="button" class="admin-tab" data-tab="weekly">📖 주간묵상집</button>
+      <button type="button" class="admin-tab" data-tab="daily">🙏 매일성경묵상</button>
       <button type="button" class="admin-tab" data-tab="share">🤝 소그룹나눔 (관리)</button>
     </div>
 
@@ -128,6 +130,36 @@
         </table>
       </div>
       <p class="sermon-empty" id="wk-empty" hidden>등록된 글이 없습니다.</p>
+    </div>
+
+    <!-- 매일성경묵상 (묵상 내용이 담긴 이미지를 날짜별로 업로드) -->
+    <div class="admin-tab-panel" id="panel-daily">
+      <form id="form-daily" class="sermon-form">
+        <div class="sermon-form-row">
+          <label>날짜
+            <input type="date" id="dl-date" required>
+          </label>
+          <label>이미지 파일
+            <input type="file" id="dl-image" accept="image/*" required>
+          </label>
+        </div>
+        <p class="field-hint">묵상 내용이 담긴 이미지 한 장을 그날짜로 등록합니다. 홈페이지 팝업 → "매일성경묵상"을 클릭하면 최근 등록분이 날짜별로 보입니다.</p>
+        <div class="sermon-form-actions">
+          <button type="submit" class="btn btn-primary" id="dl-submit-btn">등록하기</button>
+        </div>
+        <p class="auth-error" id="dl-error" hidden></p>
+      </form>
+
+      <div class="admin-toolbar" style="margin-top:36px;">
+        <p style="font-weight:700;">등록된 매일성경묵상</p>
+      </div>
+      <div class="sermon-table-wrap">
+        <table class="sermon-table">
+          <thead><tr><th>미리보기</th><th>날짜</th><th>관리</th></tr></thead>
+          <tbody id="dl-tbody"></tbody>
+        </table>
+      </div>
+      <p class="sermon-empty" id="dl-empty" hidden>등록된 이미지가 없습니다.</p>
     </div>
 
     <!-- 소그룹나눔 관리 (성도들이 직접 작성 — 여기서는 부적절한 글 삭제만) -->
@@ -328,6 +360,74 @@ document.getElementById('form-weekly').addEventListener('submit', async (e) => {
   }
 });
 
+// ---------- 매일성경묵상 (이미지 업로드) ----------
+let __dlList = [];
+const DEVOTION_BUCKET = 'devotion-images';
+
+async function loadDailyList() {
+  __dlList = await fetchWeeklyContent('daily');
+  const tbody = document.getElementById('dl-tbody');
+  const empty = document.getElementById('dl-empty');
+  if (__dlList.length === 0) { tbody.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  tbody.innerHTML = __dlList.map(item => `
+    <tr>
+      <td><img class="dl-thumb" src="${esc((item.data && item.data.imageUrl) || '')}" alt=""></td>
+      <td>${esc(item.period)}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-delete="${item.id}">삭제</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removeDaily(btn.dataset.delete)));
+}
+
+async function removeDaily(id) {
+  if (!confirm('이 묵상 이미지를 삭제할까요? 되돌릴 수 없습니다.')) return;
+  const item = __dlList.find(x => x.id === id);
+  try {
+    await deleteWeeklyContent(id);
+    if (item && item.data && item.data.imagePath) {
+      const sb = requireSupabaseClient();
+      await sb.storage.from(DEVOTION_BUCKET).remove([item.data.imagePath]);
+    }
+    await loadDailyList();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('form-daily').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('dl-error');
+  errorEl.hidden = true;
+  const date = document.getElementById('dl-date').value;
+  const file = document.getElementById('dl-image').files[0];
+  const submitBtn = document.getElementById('dl-submit-btn');
+  if (!date || !file) return;
+  submitBtn.disabled = true;
+  submitBtn.textContent = '업로드 중…';
+  try {
+    const sb = requireSupabaseClient();
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `daily/${date}-${Date.now()}.${ext}`;
+    const { error: uploadError } = await sb.storage.from(DEVOTION_BUCKET).upload(path, file, { upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: pub } = sb.storage.from(DEVOTION_BUCKET).getPublicUrl(path);
+    await createWeeklyContent({
+      category: 'daily',
+      title: date,
+      period: date,
+      data: { imageUrl: pub.publicUrl, imagePath: path },
+    });
+    document.getElementById('form-daily').reset();
+    await loadDailyList();
+  } catch (err) {
+    errorEl.textContent = '저장 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '등록하기';
+  }
+});
+
 // ---------- 소그룹나눔 (관리자: 조회 + 삭제만) ----------
 async function loadShareList() {
   const list = await fetchWeeklyContent('share');
@@ -357,7 +457,7 @@ async function initAdminWeeklyWordPage() {
     return;
   }
   document.getElementById('adminContent').hidden = false;
-  await Promise.all([loadInfographicList(), loadWeeklyList(), loadShareList()]);
+  await Promise.all([loadInfographicList(), loadWeeklyList(), loadDailyList(), loadShareList()]);
 }
 
 document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminWeeklyWordPage, 400));

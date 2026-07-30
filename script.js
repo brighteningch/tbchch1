@@ -167,8 +167,58 @@ function showSundayPopup() {
   document.addEventListener('keydown', function escClose(e) {
     if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
   });
+
+  document.getElementById('verseModalDailyBtn').addEventListener('click', () => {
+    modal.hidden = true;
+    openDevotionLightbox();
+  });
 }
 showSundayPopup();
+
+// 매일성경묵상: 관리자가 업로드한 묵상 이미지를 날짜별로 보여준다(weekly_content category='daily')
+let __devotionItems = [];
+
+function showDevotion(index) {
+  const item = __devotionItems[index];
+  if (!item) return;
+  document.getElementById('devotionImage').src = (item.data && item.data.imageUrl) || '';
+  document.getElementById('devotionDate').textContent = item.period || '';
+  document.querySelectorAll('#devotionDateList button').forEach((b, i) => b.classList.toggle('is-active', i === index));
+}
+
+function renderDevotionDateList() {
+  const wrap = document.getElementById('devotionDateList');
+  wrap.innerHTML = __devotionItems.slice(0, 14).map((item, i) =>
+    `<button type="button" data-i="${i}">${(item.period || '').slice(5) || (item.title || '')}</button>`).join('');
+  wrap.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => showDevotion(Number(btn.dataset.i))));
+}
+
+async function openDevotionLightbox() {
+  const lb = document.getElementById('devotionLightbox');
+  const img = document.getElementById('devotionImage');
+  const empty = document.getElementById('devotionEmpty');
+  lb.hidden = false;
+  try {
+    if (__devotionItems.length === 0) __devotionItems = await fetchWeeklyContent('daily');
+  } catch (err) {
+    console.error('매일성경묵상 로드 실패:', err);
+  }
+  if (__devotionItems.length === 0) {
+    img.hidden = true;
+    empty.hidden = false;
+    document.getElementById('devotionDate').textContent = '';
+    document.getElementById('devotionDateList').innerHTML = '';
+    return;
+  }
+  img.hidden = false;
+  empty.hidden = true;
+  renderDevotionDateList();
+  showDevotion(0);
+}
+
+document.getElementById('devotionLightboxClose').addEventListener('click', () => {
+  document.getElementById('devotionLightbox').hidden = true;
+});
 
 // 유튜브 실시간 방송 여부 확인 (30초마다 재확인, 방송 중이면 빨간 LIVE 배지 표시)
 const YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/channel/UCFEmEydneJGmF5DN9UYeTmA';

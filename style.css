@@ -126,10 +126,15 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
   padding: 13px 14px;
+  border: none;
   border-radius: 12px;
   background: var(--bg-warm);
   text-decoration: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
   transition: background 0.15s ease;
 }
 .verse-modal-menu-item:hover { background: #f1ede4; }
@@ -932,6 +937,38 @@ section { padding: 88px 0; }
 .lightbox-grid--folders {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
+
+/* 매일성경묵상 이미지 뷰어 */
+.devotion-image-wrap {
+  max-width: 480px;
+  margin: 0 auto 18px;
+  text-align: center;
+}
+.devotion-image-wrap img {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.devotion-empty { color: #b9c8db; padding: 60px 0; text-align: center; }
+.devotion-date-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 480px;
+  margin: 0 auto;
+}
+.devotion-date-list button {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.devotion-date-list button.is-active { background: #fff; color: var(--navy); font-weight: 700; }
 
 /* Notice */
 .notice { background: #fff; }
