@@ -50,13 +50,13 @@ fetch('/content/site.json')
   .then(data => {
     applyBindings(document, data);
 
-    // 예배안내: 주일예배/교회학교/주중예배 3개 컬러 그룹 카드
+    // 예배안내: 주일예배 카드 + (주중예배·교회학교를 세로로 묶은 카드) 2칸 구성 — 한 줄 배치
     const WORSHIP_GROUPS = [
       { key: '주일예배', cls: 'wg-sunday' },
-      { key: '교회학교', cls: 'wg-kids' },
       { key: '주중예배', cls: 'wg-week' },
+      { key: '교회학교', cls: 'wg-kids' },
     ];
-    document.getElementById('worship-groups').innerHTML = WORSHIP_GROUPS.map(g => {
+    const worshipGroupCard = g => {
       const items = data.worship.filter(w => w.category === g.key);
       if (items.length === 0) return '';
       return `
@@ -69,7 +69,10 @@ fetch('/content/site.json')
             </tbody>
           </table>
         </div>`;
-    }).join('');
+    };
+    const [sundayGroup, weekGroup, kidsGroup] = WORSHIP_GROUPS.map(worshipGroupCard);
+    document.getElementById('worship-groups').innerHTML =
+      sundayGroup + `<div class="worship-col">${weekGroup}${kidsGroup}</div>`;
 
     // 빠른링크 예배시간 요약(1부/2부만)
     const w1 = data.worship[0], w2 = data.worship[1];

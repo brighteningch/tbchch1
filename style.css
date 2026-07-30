@@ -690,6 +690,11 @@ section { padding: 88px 0; }
   grid-template-columns: repeat(auto-fit, minmax(390px, 1fr));
   gap: 20px;
 }
+.worship-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
 .worship-group {
   display: flex;
   border-radius: 14px;
