@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성도 목록 · 재적 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="manifest" href="/pastoral-manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">PASTORAL</span>
+  <h1>성도 목록</h1>
+  <p>이름으로 검색하거나 가정교회별로 모아 볼 수 있습니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="pastoralGuard" class="admin-guard" hidden>
+    <p>담임목사·부목사만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="pastoralContent" hidden>
+    <nav class="pastoral-nav">
+      <a href="/pages/pastoral-dashboard.html">대시보드</a>
+      <a href="/pages/pastoral-members.html" class="active">성도 목록</a>
+      <a href="/pages/pastoral-attendance.html">출석 체크</a>
+    </nav>
+
+    <div class="pastoral-search-row">
+      <input type="search" id="fSearch" placeholder="이름으로 검색">
+      <select id="fCellGroup"><option value="">전체 가정교회</option></select>
+      <a href="/pages/pastoral-member-detail.html?new=1" class="btn btn-primary btn-sm">＋ 새 성도 등록</a>
+    </div>
+
+    <p class="auth-error" id="loadError" hidden></p>
+    <div class="admin-toolbar" style="margin-top:16px;">
+      <p id="memberCount" style="font-weight:700;"></p>
+    </div>
+    <div class="member-table-wrap">
+      <table class="member-table">
+        <thead>
+          <tr><th>이름</th><th>직분</th><th>가정교회</th><th>생년월일</th><th>연락처</th></tr>
+        </thead>
+        <tbody id="membersTbody"></tbody>
+      </table>
+    </div>
+    <p class="pastoral-empty" id="membersEmpty" hidden>검색 결과가 없습니다.</p>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/pastoral-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function formatBirth(m) {
+  if (!m.birth_year && !m.birth_month) return '';
+  const y = m.birth_year || '?';
+  const mo = m.birth_month ? String(m.birth_month).padStart(2, '0') : '?';
+  const d = m.birth_day ? String(m.birth_day).padStart(2, '0') : '?';
+  return `${y}.${mo}.${d}${m.is_lunar ? ' (음)' : ''}`;
+}
+
+let __cellGroups = [];
+
+async function loadCellGroupFilter() {
+  __cellGroups = await fetchCellGroups();
+  const sel = document.getElementById('fCellGroup');
+  __cellGroups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadMembers() {
+  const errEl = document.getElementById('loadError');
+  errEl.hidden = true;
+  const search = document.getElementById('fSearch').value.trim();
+  const cellGroupId = document.getElementById('fCellGroup').value;
+  let members;
+  try {
+    members = await fetchMembers({ search, cellGroupId });
+  } catch (err) {
+    console.error(err);
+    errEl.textContent = '목록을 불러오지 못했습니다: ' + err.message;
+    errEl.hidden = false;
+    return;
+  }
+  const tbody = document.getElementById('membersTbody');
+  const empty = document.getElementById('membersEmpty');
+  document.getElementById('memberCount').textContent = `전체 ${members.length}명`;
+  if (members.length === 0) {
+    tbody.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  tbody.innerHTML = members.map(m => `
+    <tr class="pastoral-row" data-id="${m.id}">
+      <td>${esc(m.name)}</td>
+      <td>${esc(m.position)}</td>
+      <td>${esc(m.cell_groups ? m.cell_groups.name : '')}</td>
+      <td>${formatBirth(m)}</td>
+      <td>${esc(m.phone)}</td>
+    </tr>`).join('');
+  tbody.querySelectorAll('[data-id]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      location.href = `/pages/pastoral-member-detail.html?id=${tr.dataset.id}`;
+    });
+  });
+}
+
+let __searchTimer = null;
+function onSearchInput() {
+  clearTimeout(__searchTimer);
+  __searchTimer = setTimeout(loadMembers, 250);
+}
+
+async function initPastoralMembersPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_pastoral_admin) {
+    document.getElementById('pastoralGuard').hidden = false;
+    return;
+  }
+  document.getElementById('pastoralContent').hidden = false;
+  try {
+    await loadCellGroupFilter();
+    await loadMembers();
+  } catch (err) {
+    console.error(err);
+    const errEl = document.getElementById('loadError');
+    errEl.textContent = '목록을 불러오지 못했습니다: ' + err.message + ' (Supabase에 스키마·시드 SQL을 실행하셨는지 확인해주세요)';
+    errEl.hidden = false;
+    return;
+  }
+  document.getElementById('fSearch').addEventListener('input', onSearchInput);
+  document.getElementById('fCellGroup').addEventListener('change', loadMembers);
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initPastoralMembersPage, 400));
+</script>
+</body>
+</html>

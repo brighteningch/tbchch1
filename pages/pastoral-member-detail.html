@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성도 정보 · 재적 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="manifest" href="/pastoral-manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">PASTORAL</span>
+  <h1 id="pageTitle">성도 정보</h1>
+  <p>기본정보·가족관계·기도제목을 확인하고 관리합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:760px;">
+  <div id="pastoralGuard" class="admin-guard" hidden>
+    <p>담임목사·부목사만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="pastoralContent" hidden>
+    <a href="/pages/pastoral-members.html" class="btn btn-ghost btn-sm">← 성도 목록으로</a>
+    <p class="auth-error" id="loadError" hidden style="margin-top:12px;"></p>
+
+    <form id="memberForm" class="sermon-form" style="margin-top:20px;">
+      <div class="sermon-form-row">
+        <label>이름
+          <input type="text" id="fName" required placeholder="예: 김빛나">
+        </label>
+        <label>직분
+          <input type="text" id="fPosition" placeholder="예: 집사">
+        </label>
+      </div>
+      <div class="sermon-form-row">
+        <label>성별
+          <select id="fGender">
+            <option value="">미상</option>
+            <option value="M">남</option>
+            <option value="F">여</option>
+          </select>
+        </label>
+        <label>가정교회
+          <select id="fCellGroup"><option value="">미배정</option></select>
+        </label>
+      </div>
+      <label>생년월일
+        <div class="pastoral-birth-row">
+          <input type="number" id="fBirthYear" placeholder="연도(예: 1970)" min="1900" max="2030">
+          <input type="number" id="fBirthMonth" placeholder="월" min="1" max="12">
+          <input type="number" id="fBirthDay" placeholder="일" min="1" max="31">
+        </div>
+        <label class="pastoral-lunar-check"><input type="checkbox" id="fIsLunar"> 음력 생일</label>
+      </label>
+      <div class="sermon-form-row">
+        <label>연락처
+          <input type="text" id="fPhone" placeholder="010-0000-0000">
+        </label>
+        <label>주소
+          <input type="text" id="fAddress" placeholder="주소">
+        </label>
+      </div>
+      <label>메모
+        <textarea id="fNote" rows="3" placeholder="특이사항, 확인 필요한 내용 등"></textarea>
+      </label>
+      <div class="sermon-form-actions">
+        <button type="submit" class="btn btn-primary" id="saveBtn">저장</button>
+        <button type="button" class="btn btn-ghost" id="deleteBtn" hidden>이 성도 삭제</button>
+      </div>
+      <p class="auth-error" id="formError" hidden></p>
+    </form>
+
+    <div id="relatedSections" hidden>
+      <div class="admin-toolbar" style="margin-top:40px;">
+        <p style="font-weight:700;">👨‍👩‍👧 가족관계</p>
+      </div>
+      <div id="familyList" class="pastoral-list"></div>
+      <p class="pastoral-empty" id="familyEmpty" hidden>등록된 가족관계가 없습니다.</p>
+      <div class="pastoral-add-row">
+        <select id="fRelatedMember"><option value="">성도 선택</option></select>
+        <input type="text" id="fRelationType" placeholder="관계 (예: 배우자, 자녀, 며느리)">
+        <button type="button" class="btn btn-ghost btn-sm" id="addFamilyBtn">추가</button>
+      </div>
+
+      <div class="admin-toolbar" style="margin-top:40px;">
+        <p style="font-weight:700;">🙏 기도제목</p>
+      </div>
+      <div id="prayerList" class="pastoral-list"></div>
+      <p class="pastoral-empty" id="prayerEmpty" hidden>등록된 기도제목이 없습니다.</p>
+      <div class="pastoral-add-row">
+        <input type="text" id="fPrayerContent" placeholder="새 기도제목">
+        <button type="button" class="btn btn-ghost btn-sm" id="addPrayerBtn">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/pastoral-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+const params = new URLSearchParams(location.search);
+const memberId = params.get('id');
+const isNew = params.get('new') === '1';
+
+function readForm() {
+  return {
+    name: document.getElementById('fName').value.trim(),
+    position: document.getElementById('fPosition').value.trim() || null,
+    gender: document.getElementById('fGender').value || null,
+    cell_group_id: document.getElementById('fCellGroup').value || null,
+    birth_year: document.getElementById('fBirthYear').value ? Number(document.getElementById('fBirthYear').value) : null,
+    birth_month: document.getElementById('fBirthMonth').value ? Number(document.getElementById('fBirthMonth').value) : null,
+    birth_day: document.getElementById('fBirthDay').value ? Number(document.getElementById('fBirthDay').value) : null,
+    is_lunar: document.getElementById('fIsLunar').checked,
+    phone: document.getElementById('fPhone').value.trim() || null,
+    address: document.getElementById('fAddress').value.trim() || null,
+    note: document.getElementById('fNote').value.trim() || null,
+  };
+}
+
+function fillForm(m) {
+  document.getElementById('fName').value = m.name || '';
+  document.getElementById('fPosition').value = m.position || '';
+  document.getElementById('fGender').value = m.gender || '';
+  document.getElementById('fCellGroup').value = m.cell_group_id || '';
+  document.getElementById('fBirthYear').value = m.birth_year || '';
+  document.getElementById('fBirthMonth').value = m.birth_month || '';
+  document.getElementById('fBirthDay').value = m.birth_day || '';
+  document.getElementById('fIsLunar').checked = !!m.is_lunar;
+  document.getElementById('fPhone').value = m.phone || '';
+  document.getElementById('fAddress').value = m.address || '';
+  document.getElementById('fNote').value = m.note || '';
+}
+
+async function loadCellGroupOptions() {
+  const groups = await fetchCellGroups();
+  const sel = document.getElementById('fCellGroup');
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadRelatedMemberOptions(excludeId) {
+  const members = await fetchMembers({});
+  const sel = document.getElementById('fRelatedMember');
+  members.filter(m => m.id !== excludeId).forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = `${m.name}${m.position ? ' (' + m.position + ')' : ''}`;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadFamilyList() {
+  const list = await fetchFamilyRelations(memberId);
+  const wrap = document.getElementById('familyList');
+  const empty = document.getElementById('familyEmpty');
+  if (list.length === 0) {
+    wrap.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  wrap.innerHTML = list.map(r => `
+    <div class="pastoral-list-item">
+      <span><strong>${esc(r.relation_type)}</strong> · ${esc(r.related_member ? r.related_member.name : '(삭제된 성도)')}${r.related_member && r.related_member.position ? ' (' + esc(r.related_member.position) + ')' : ''}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-remove-family="${r.id}">삭제</button>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-remove-family]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('이 가족관계를 삭제할까요?')) return;
+      await deleteFamilyRelation(btn.dataset.removeFamily);
+      await loadFamilyList();
+    });
+  });
+}
+
+async function loadPrayerList() {
+  const list = await fetchPrayerRequests(memberId);
+  const wrap = document.getElementById('prayerList');
+  const empty = document.getElementById('prayerEmpty');
+  if (list.length === 0) {
+    wrap.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  wrap.innerHTML = list.map(p => `
+    <div class="pastoral-list-item">
+      <span>
+        <span class="pastoral-status-badge ${p.status === 'answered' ? 'is-answered' : ''}">${p.status === 'answered' ? '응답됨' : '진행중'}</span>
+        ${esc(p.content)}
+        <small>${(p.created_at || '').slice(0, 10)}</small>
+      </span>
+      <span class="pastoral-list-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-toggle-prayer="${p.id}" data-status="${p.status}">
+          ${p.status === 'answered' ? '진행중으로' : '응답됨으로'}
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" data-remove-prayer="${p.id}">삭제</button>
+      </span>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-toggle-prayer]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const next = btn.dataset.status === 'answered' ? 'praying' : 'answered';
+      await setPrayerRequestStatus(btn.dataset.togglePrayer, next);
+      await loadPrayerList();
+    });
+  });
+  wrap.querySelectorAll('[data-remove-prayer]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('이 기도제목을 삭제할까요?')) return;
+      await deletePrayerRequest(btn.dataset.removePrayer);
+      await loadPrayerList();
+    });
+  });
+}
+
+async function initPastoralDetailPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_pastoral_admin) {
+    document.getElementById('pastoralGuard').hidden = false;
+    return;
+  }
+  document.getElementById('pastoralContent').hidden = false;
+
+  let member = null;
+  try {
+    await loadCellGroupOptions();
+    if (!isNew && memberId) {
+      document.getElementById('pageTitle').textContent = '성도 정보 수정';
+      member = await fetchMemberById(memberId);
+      fillForm(member);
+      document.getElementById('deleteBtn').hidden = false;
+      document.getElementById('relatedSections').hidden = false;
+      await loadRelatedMemberOptions(memberId);
+      await loadFamilyList();
+      await loadPrayerList();
+    } else {
+      document.getElementById('pageTitle').textContent = '새 성도 등록';
+    }
+  } catch (err) {
+    console.error(err);
+    const errEl = document.getElementById('loadError');
+    errEl.textContent = '정보를 불러오지 못했습니다: ' + err.message + ' (Supabase에 스키마·시드 SQL을 실행하셨는지 확인해주세요)';
+    errEl.hidden = false;
+    return;
+  }
+
+  if (!isNew && memberId) {
+    document.getElementById('addFamilyBtn').addEventListener('click', async () => {
+      const relatedMemberId = document.getElementById('fRelatedMember').value;
+      const relationType = document.getElementById('fRelationType').value.trim();
+      if (!relatedMemberId || !relationType) { alert('성도와 관계를 모두 입력해주세요.'); return; }
+      await addFamilyRelation({ memberId, relatedMemberId, relationType });
+      document.getElementById('fRelationType').value = '';
+      document.getElementById('fRelatedMember').value = '';
+      await loadFamilyList();
+    });
+
+    document.getElementById('addPrayerBtn').addEventListener('click', async () => {
+      const content = document.getElementById('fPrayerContent').value.trim();
+      if (!content) return;
+      await addPrayerRequest({ memberId, content });
+      document.getElementById('fPrayerContent').value = '';
+      await loadPrayerList();
+    });
+
+    document.getElementById('deleteBtn').addEventListener('click', async () => {
+      if (!confirm(`${member.name} 성도님의 정보를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+      try {
+        await deleteMember(memberId);
+        location.href = '/pages/pastoral-members.html';
+      } catch (err) {
+        alert('삭제 중 오류가 발생했습니다: ' + err.message);
+      }
+    });
+  }
+
+  document.getElementById('memberForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('formError');
+    errorEl.hidden = true;
+    const payload = readForm();
+    if (!payload.name) { errorEl.textContent = '이름을 입력해주세요.'; errorEl.hidden = false; return; }
+    try {
+      if (!isNew && memberId) {
+        await updateMember(memberId, payload);
+        alert('저장되었습니다.');
+      } else {
+        const created = await createMember(payload);
+        location.href = `/pages/pastoral-member-detail.html?id=${created.id}`;
+      }
+    } catch (err) {
+      errorEl.textContent = '저장 중 오류가 발생했습니다: ' + err.message;
+      errorEl.hidden = false;
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initPastoralDetailPage, 400));
+</script>
+</body>
+</html>

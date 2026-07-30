@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>재적 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="manifest" href="/pastoral-manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">PASTORAL</span>
+  <h1>재적 관리</h1>
+  <p>성도님들의 정보를 확인하고, 생일과 기도제목을 관리합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="pastoralGuard" class="admin-guard" hidden>
+    <p>담임목사·부목사만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="pastoralContent" hidden>
+    <nav class="pastoral-nav">
+      <a href="/pages/pastoral-dashboard.html" class="active">대시보드</a>
+      <a href="/pages/pastoral-members.html">성도 목록</a>
+      <a href="/pages/pastoral-attendance.html">출석 체크</a>
+    </nav>
+
+    <div class="admin-toolbar">
+      <p style="font-weight:700;">🎂 이번 주 생일</p>
+    </div>
+    <div id="birthdayBanner" class="birthday-banner"></div>
+    <p id="birthdayEmpty" class="pastoral-empty" hidden>이번 주 생일인 성도님이 없습니다.</p>
+
+    <div class="admin-toolbar" style="margin-top:40px;">
+      <p style="font-weight:700;">📅 생일 달력</p>
+      <div class="calendar-nav">
+        <button type="button" class="btn btn-ghost btn-sm" id="calPrevBtn">‹ 이전달</button>
+        <span id="calMonthLabel" class="calendar-month-label"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="calNextBtn">다음달 ›</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="calTodayBtn">오늘</button>
+      </div>
+    </div>
+    <div class="calendar-wrap">
+      <div class="calendar-weekdays">
+        <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+
+    <div class="admin-toolbar" style="margin-top:40px;">
+      <p style="font-weight:700;">🙏 진행 중인 기도제목</p>
+      <a href="/pages/pastoral-members.html" class="btn btn-ghost btn-sm">성도 목록 →</a>
+    </div>
+    <div id="prayerSummary" class="prayer-summary-list"></div>
+    <p id="prayerEmpty" class="pastoral-empty" hidden>등록된 기도제목이 없습니다.</p>
+
+    <div class="pastoral-quick-actions">
+      <a href="/pages/pastoral-members.html" class="btn btn-primary">성도 목록 보기</a>
+      <a href="/pages/pastoral-member-detail.html?new=1" class="btn btn-ghost">새 성도 등록</a>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/pastoral-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+// month/day만으로 오늘부터 며칠 뒤인지(연도 넘어가는 경우 포함) 계산
+function daysUntilBirthday(month, day, from) {
+  const now = from ? new Date(from) : new Date();
+  now.setHours(0, 0, 0, 0);
+  const year = now.getFullYear();
+  let next = new Date(year, month - 1, day);
+  next.setHours(0, 0, 0, 0);
+  if (next < now) next = new Date(year + 1, month - 1, day);
+  return Math.round((next - now) / 86400000);
+}
+
+let __birthdayMembers = [];
+let __birthdayMap = {}; // "M-D" -> [member, ...]
+let __calYear, __calMonth; // __calMonth: 1~12
+
+function renderBirthdayBanner() {
+  const upcoming = __birthdayMembers
+    .map(m => ({ ...m, daysUntil: daysUntilBirthday(m.birth_month, m.birth_day) }))
+    .filter(m => m.daysUntil <= 7)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+
+  const banner = document.getElementById('birthdayBanner');
+  const empty = document.getElementById('birthdayEmpty');
+  if (upcoming.length === 0) {
+    banner.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  banner.innerHTML = upcoming.map(m => {
+    const label = m.daysUntil === 0 ? '오늘' : m.daysUntil === 1 ? '내일' : `${m.daysUntil}일 후`;
+    return `
+      <a class="birthday-card${m.daysUntil === 0 ? ' birthday-card--today' : ''}" href="/pages/pastoral-member-detail.html?id=${m.id}">
+        <span class="birthday-card-date">${String(m.birth_month).padStart(2,'0')}.${String(m.birth_day).padStart(2,'0')}${m.is_lunar ? ' (음)' : ''}</span>
+        <span class="birthday-card-name">${esc(m.name)}<small>${esc(m.position || '')}</small></span>
+        <span class="birthday-card-when">${label}</span>
+      </a>`;
+  }).join('');
+}
+
+async function loadBirthdayData() {
+  __birthdayMembers = await fetchAllMembersForBanner();
+  __birthdayMap = {};
+  __birthdayMembers.forEach(m => {
+    const key = `${m.birth_month}-${m.birth_day}`;
+    (__birthdayMap[key] = __birthdayMap[key] || []).push(m);
+  });
+  renderBirthdayBanner();
+  renderCalendar();
+}
+
+function renderCalendar() {
+  document.getElementById('calMonthLabel').textContent = `${__calYear}년 ${__calMonth}월`;
+  const grid = document.getElementById('calendarGrid');
+  const firstWeekday = new Date(__calYear, __calMonth - 1, 1).getDay(); // 0=일
+  const daysInMonth = new Date(__calYear, __calMonth, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === __calYear && today.getMonth() + 1 === __calMonth;
+
+  let cells = '';
+  for (let i = 0; i < firstWeekday; i++) {
+    cells += '<div class="calendar-day calendar-day--empty"></div>';
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const list = __birthdayMap[`${__calMonth}-${day}`] || [];
+    const isToday = isCurrentMonth && today.getDate() === day;
+    const namesHtml = list.slice(0, 3).map(m =>
+      `<a class="calendar-birthday-tag" href="/pages/pastoral-member-detail.html?id=${m.id}">${esc(m.name)}${m.is_lunar ? '<span class="calendar-lunar-mark">음</span>' : ''}</a>`
+    ).join('');
+    const moreHtml = list.length > 3 ? `<span class="calendar-birthday-more">+${list.length - 3}명</span>` : '';
+    cells += `
+      <div class="calendar-day${isToday ? ' calendar-day--today' : ''}${list.length ? ' calendar-day--has-birthday' : ''}">
+        <span class="calendar-day-num">${day}</span>
+        <div class="calendar-day-birthdays">${namesHtml}${moreHtml}</div>
+      </div>`;
+  }
+  grid.innerHTML = cells;
+}
+
+function shiftCalendarMonth(delta) {
+  __calMonth += delta;
+  if (__calMonth > 12) { __calMonth = 1; __calYear += 1; }
+  if (__calMonth < 1) { __calMonth = 12; __calYear -= 1; }
+  renderCalendar();
+}
+
+function initCalendarControls() {
+  const now = new Date();
+  __calYear = now.getFullYear();
+  __calMonth = now.getMonth() + 1;
+  document.getElementById('calPrevBtn').addEventListener('click', () => shiftCalendarMonth(-1));
+  document.getElementById('calNextBtn').addEventListener('click', () => shiftCalendarMonth(1));
+  document.getElementById('calTodayBtn').addEventListener('click', () => {
+    const n = new Date();
+    __calYear = n.getFullYear();
+    __calMonth = n.getMonth() + 1;
+    renderCalendar();
+  });
+  renderCalendar();
+}
+
+async function loadPrayerSummary() {
+  const list = await fetchRecentPrayingRequests(8);
+  const wrap = document.getElementById('prayerSummary');
+  const empty = document.getElementById('prayerEmpty');
+  if (list.length === 0) {
+    wrap.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  wrap.innerHTML = list.map(p => `
+    <a class="prayer-summary-item" href="/pages/pastoral-member-detail.html?id=${p.member_id}">
+      <span class="prayer-summary-name">${esc(p.members ? p.members.name : '')}</span>
+      <span class="prayer-summary-content">${esc(p.content)}</span>
+      <span class="prayer-summary-date">${(p.created_at || '').slice(0, 10)}</span>
+    </a>`).join('');
+}
+
+async function initPastoralDashboard() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_pastoral_admin) {
+    document.getElementById('pastoralGuard').hidden = false;
+    return;
+  }
+  document.getElementById('pastoralContent').hidden = false;
+  initCalendarControls();
+  try {
+    await Promise.all([loadBirthdayData(), loadPrayerSummary()]);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initPastoralDashboard, 400));
+</script>
+</body>
+</html>

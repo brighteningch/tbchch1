@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>출석 체크 · 재적 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="manifest" href="/pastoral-manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">PASTORAL</span>
+  <h1>출석 체크</h1>
+  <p>날짜를 고르고 예배 참석 여부를 체크하면 바로 저장됩니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="pastoralGuard" class="admin-guard" hidden>
+    <p>담임목사·부목사만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="pastoralContent" hidden>
+    <nav class="pastoral-nav">
+      <a href="/pages/pastoral-dashboard.html">대시보드</a>
+      <a href="/pages/pastoral-members.html">성도 목록</a>
+      <a href="/pages/pastoral-attendance.html" class="active">출석 체크</a>
+    </nav>
+
+    <p class="auth-error" id="loadError" hidden></p>
+    <div class="attendance-toolbar">
+      <label>날짜 <input type="date" id="fDate"></label>
+      <select id="fCellGroup"><option value="">전체 가정교회</option></select>
+      <p class="attendance-summary" id="attendanceSummary"></p>
+    </div>
+
+    <div class="attendance-table-wrap">
+      <table class="attendance-table">
+        <thead>
+          <tr><th class="attendance-check">출석</th><th>이름</th><th>직분</th><th>가정교회</th></tr>
+        </thead>
+        <tbody id="attendanceTbody"></tbody>
+      </table>
+    </div>
+    <p class="pastoral-empty" id="attendanceEmpty" hidden>해당하는 성도가 없습니다.</p>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/pastoral-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+let __members = [];
+let __attendanceMap = {}; // member_id -> present(boolean)
+
+function updateSummary() {
+  const total = __members.length;
+  const present = __members.filter(m => __attendanceMap[m.id] === true).length;
+  document.getElementById('attendanceSummary').textContent = `출석 ${present}명 / 전체 ${total}명`;
+}
+
+function renderTable() {
+  const cellGroupFilter = document.getElementById('fCellGroup').value;
+  const filtered = cellGroupFilter ? __members.filter(m => m.cell_group_id === cellGroupFilter) : __members;
+  const tbody = document.getElementById('attendanceTbody');
+  const empty = document.getElementById('attendanceEmpty');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.hidden = false;
+    updateSummary();
+    return;
+  }
+  empty.hidden = true;
+
+  // 가정교회별로 묶어서 그룹 헤더 행을 넣는다
+  let lastGroupName = null;
+  let rows = '';
+  filtered.forEach(m => {
+    const groupName = m.cell_groups ? m.cell_groups.name : '미배정';
+    if (groupName !== lastGroupName) {
+      rows += `<tr class="attendance-group-row"><td colspan="4">${esc(groupName)}</td></tr>`;
+      lastGroupName = groupName;
+    }
+    const checked = __attendanceMap[m.id] === true ? 'checked' : '';
+    rows += `
+      <tr>
+        <td class="attendance-check"><input type="checkbox" data-member-id="${m.id}" ${checked}></td>
+        <td>${esc(m.name)}</td>
+        <td>${esc(m.position)}</td>
+        <td>${esc(groupName)}</td>
+      </tr>`;
+  });
+  tbody.innerHTML = rows;
+
+  tbody.querySelectorAll('[data-member-id]').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const memberId = cb.dataset.memberId;
+      const present = cb.checked;
+      cb.disabled = true;
+      try {
+        await setAttendance({ memberId, serviceDate: document.getElementById('fDate').value, present });
+        __attendanceMap[memberId] = present;
+        updateSummary();
+      } catch (err) {
+        alert('저장 중 오류가 발생했습니다: ' + err.message);
+        cb.checked = !present;
+      } finally {
+        cb.disabled = false;
+      }
+    });
+  });
+  updateSummary();
+}
+
+async function loadForDate() {
+  const errEl = document.getElementById('loadError');
+  errEl.hidden = true;
+  const date = document.getElementById('fDate').value;
+  try {
+    const records = await fetchAttendanceByDate(date);
+    __attendanceMap = Object.fromEntries(records.map(r => [r.member_id, r.present]));
+  } catch (err) {
+    console.error(err);
+    errEl.textContent = '출석 기록을 불러오지 못했습니다: ' + err.message;
+    errEl.hidden = false;
+    return;
+  }
+  renderTable();
+}
+
+async function initPastoralAttendancePage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_pastoral_admin) {
+    document.getElementById('pastoralGuard').hidden = false;
+    return;
+  }
+  document.getElementById('pastoralContent').hidden = false;
+
+  document.getElementById('fDate').value = todayStr();
+
+  try {
+    const [members, groups] = await Promise.all([fetchMembers({}), fetchCellGroups()]);
+    __members = members;
+    const sel = document.getElementById('fCellGroup');
+    groups.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      sel.appendChild(opt);
+    });
+    await loadForDate();
+  } catch (err) {
+    console.error(err);
+    const errEl = document.getElementById('loadError');
+    errEl.textContent = '출석표를 불러오지 못했습니다: ' + err.message + ' (Supabase에 스키마·시드 SQL을 실행하셨는지 확인해주세요)';
+    errEl.hidden = false;
+    return;
+  }
+
+  document.getElementById('fDate').addEventListener('change', loadForDate);
+  document.getElementById('fCellGroup').addEventListener('change', renderTable);
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initPastoralAttendancePage, 400));
+</script>
+</body>
+</html>
