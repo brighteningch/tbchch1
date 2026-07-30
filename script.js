@@ -261,7 +261,7 @@ async function loadMissionVideo() {
 }
 loadMissionVideo();
 
-// 말씀과 찬양 캐러셀: 탭(주일예배/수요예배/금요예배) 선택 시 해당 카테고리 최근 4개를 보여준다
+// 말씀과 찬양 캐러셀: 탭 선택 시 해당 카테고리 최근 4개를 보여준다
 const SHOWCASE_TABS = [
   { label: '주일예배', category: 'sermon-sunday' },
   { label: '수요예배', category: 'sermon-wed' },

@@ -782,8 +782,18 @@ section { padding: 88px 0; }
 .showcase-body p { font-size: 13px; color: var(--text-gray); }
 .showcase-empty { color: var(--text-gray); padding: 40px 0; text-align: center; }
 
-.showcase-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+.showcase-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.showcase-tabs::-webkit-scrollbar { display: none; }
 .showcase-tab {
+  flex: none;
+  white-space: nowrap;
   padding: 9px 20px;
   border-radius: 999px;
   border: 1px solid var(--border-light);
