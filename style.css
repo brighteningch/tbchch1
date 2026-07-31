@@ -161,28 +161,41 @@ body {
   color: var(--text-gray);
   cursor: pointer;
 }
-.press-modal-thumb-link { display: block; margin-bottom: 14px; }
 .press-modal-thumb {
   width: 100%;
   border-radius: 10px;
   border: 1px solid var(--border-light);
   box-shadow: 0 4px 14px rgba(15, 40, 70, 0.1);
 }
-.press-modal-desc { font-size: 14px; color: var(--text-gray); line-height: 1.5; margin-bottom: 16px; }
-.press-modal-cta {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 14px;
-  border-radius: 10px;
-  background: var(--navy);
-  color: #fff;
-  font-weight: 700;
-  font-size: 14px;
-  text-align: center;
+
+/* ---------- 홈페이지 언론보도 카드 (활천 매거진 등) ---------- */
+.press-feature-card {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(15, 40, 70, 0.06);
   text-decoration: none;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
-.press-modal-cta:hover { opacity: 0.9; }
+.press-feature-card:hover { box-shadow: 0 14px 36px rgba(15, 40, 70, 0.1); transform: translateY(-2px); }
+.press-feature-thumb {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+.press-feature-body { display: flex; flex-direction: column; gap: 10px; }
+.press-feature-desc { font-size: 15px; color: var(--text-dark); line-height: 1.5; }
+.press-feature-cta { font-size: 14px; font-weight: 700; color: var(--navy); }
+@media (max-width: 560px) {
+  .press-feature-card { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .press-feature-thumb { width: 100%; height: auto; aspect-ratio: 4/3; }
+}
 
 /* ---------- 찬양 듣기 플로팅 플레이어 ---------- */
 .praise-player {
@@ -641,11 +654,13 @@ section { padding: 88px 0; }
   letter-spacing: -0.5px;
 }
 .worship .section-title, .sermon .section-title,
-.gallery .section-title, .notice .section-title, .offering .section-title, .visit .section-title {
+.gallery .section-title, .notice .section-title, .offering .section-title, .visit .section-title,
+.press .section-title {
   text-align: center;
 }
 .worship .eyebrow, .sermon .eyebrow,
-.gallery .eyebrow, .notice .eyebrow, .offering .eyebrow, .visit .eyebrow {
+.gallery .eyebrow, .notice .eyebrow, .offering .eyebrow, .visit .eyebrow,
+.press .eyebrow {
   text-align: center;
 }
 
