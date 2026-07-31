@@ -73,28 +73,50 @@
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
 <script src="/pastoral-data.js"></script>
+<script src="/korean-lunar-calendar.js"></script>
 <script src="/common.js"></script>
 <script>
 function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
-// month/day만으로 오늘부터 며칠 뒤인지(연도 넘어가는 경우 포함) 계산
-function daysUntilBirthday(month, day, from) {
+// 음력 생일(윤달 아님)을 지정한 양력 연도 기준 실제 양력 월/일로 변환한다.
+// 음력 새해가 보통 1~2월에 시작하므로, 그 연도로 먼저 시도하고 결과가
+// 다른 해로 넘어가면 전년도 음력을 기준으로 다시 시도한다.
+const __lunarConverter = new KoreanLunarCalendar();
+function resolveSolarBirthday(member, year) {
+  if (!member.is_lunar) return { month: member.birth_month, day: member.birth_day };
+  for (const lunarYear of [year, year - 1]) {
+    if (__lunarConverter.setLunarDate(lunarYear, member.birth_month, member.birth_day, false)) {
+      const solar = __lunarConverter.getSolarCalendar();
+      if (solar.year === year) return { month: solar.month, day: solar.day };
+    }
+  }
+  return null; // 변환 라이브러리 지원 범위(1000~2050년) 밖이거나 무효한 날짜
+}
+
+// 성도의 다음 생일(양력 환산 후)이 오늘부터 며칠 남았는지와, 그 생일의 실제
+// 양력 날짜를 함께 반환한다 (따로 계산하면 두 값이 어긋날 수 있어 하나로 묶는다).
+function nextBirthdayOccurrence(member, from) {
   const now = from ? new Date(from) : new Date();
   now.setHours(0, 0, 0, 0);
   const year = now.getFullYear();
-  let next = new Date(year, month - 1, day);
-  next.setHours(0, 0, 0, 0);
-  if (next < now) next = new Date(year + 1, month - 1, day);
-  return Math.round((next - now) / 86400000);
+  for (const y of [year, year + 1]) {
+    const solar = resolveSolarBirthday(member, y);
+    if (!solar) continue;
+    const next = new Date(y, solar.month - 1, solar.day);
+    next.setHours(0, 0, 0, 0);
+    if (next >= now) {
+      return { daysUntil: Math.round((next - now) / 86400000), solar };
+    }
+  }
+  return { daysUntil: Infinity, solar: null };
 }
 
 let __birthdayMembers = [];
-let __birthdayMap = {}; // "M-D" -> [member, ...]
 let __calYear, __calMonth; // __calMonth: 1~12
 
 function renderBirthdayBanner() {
   const upcoming = __birthdayMembers
-    .map(m => ({ ...m, daysUntil: daysUntilBirthday(m.birth_month, m.birth_day) }))
+    .map(m => ({ ...m, ...nextBirthdayOccurrence(m) }))
     .filter(m => m.daysUntil <= 7)
     .sort((a, b) => a.daysUntil - b.daysUntil);
 
@@ -108,9 +130,10 @@ function renderBirthdayBanner() {
   empty.hidden = true;
   banner.innerHTML = upcoming.map(m => {
     const label = m.daysUntil === 0 ? '오늘' : m.daysUntil === 1 ? '내일' : `${m.daysUntil}일 후`;
+    const solarHint = m.is_lunar && m.solar ? ` → 양력 ${String(m.solar.month).padStart(2,'0')}.${String(m.solar.day).padStart(2,'0')}` : '';
     return `
       <a class="birthday-card${m.daysUntil === 0 ? ' birthday-card--today' : ''}" href="/pages/pastoral-member-detail.html?id=${m.id}">
-        <span class="birthday-card-date">${String(m.birth_month).padStart(2,'0')}.${String(m.birth_day).padStart(2,'0')}${m.is_lunar ? ' (음)' : ''}</span>
+        <span class="birthday-card-date">${String(m.birth_month).padStart(2,'0')}.${String(m.birth_day).padStart(2,'0')}${m.is_lunar ? ' (음)' + solarHint : ''}</span>
         <span class="birthday-card-name">${esc(m.name)}<small>${esc(m.position || '')}</small></span>
         <span class="birthday-card-when">${label}</span>
       </a>`;
@@ -119,13 +142,21 @@ function renderBirthdayBanner() {
 
 async function loadBirthdayData() {
   __birthdayMembers = await fetchAllMembersForBanner();
-  __birthdayMap = {};
-  __birthdayMembers.forEach(m => {
-    const key = `${m.birth_month}-${m.birth_day}`;
-    (__birthdayMap[key] = __birthdayMap[key] || []).push(m);
-  });
   renderBirthdayBanner();
   renderCalendar();
+}
+
+// 달력에 표시된 연도 기준으로, 그 해에 각 성도의 생일이 해당하는 양력 "월-일" 맵을 만든다.
+// 음력 성도는 연도가 바뀔 때마다 양력 날짜가 달라지므로 달력을 그릴 때마다 다시 계산한다.
+function buildBirthdayMapForYear(year) {
+  const map = {};
+  __birthdayMembers.forEach(m => {
+    const solar = resolveSolarBirthday(m, year);
+    if (!solar) return;
+    const key = `${solar.month}-${solar.day}`;
+    (map[key] = map[key] || []).push(m);
+  });
+  return map;
 }
 
 function renderCalendar() {
@@ -135,13 +166,14 @@ function renderCalendar() {
   const daysInMonth = new Date(__calYear, __calMonth, 0).getDate();
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === __calYear && today.getMonth() + 1 === __calMonth;
+  const birthdayMap = buildBirthdayMapForYear(__calYear);
 
   let cells = '';
   for (let i = 0; i < firstWeekday; i++) {
     cells += '<div class="calendar-day calendar-day--empty"></div>';
   }
   for (let day = 1; day <= daysInMonth; day++) {
-    const list = __birthdayMap[`${__calMonth}-${day}`] || [];
+    const list = birthdayMap[`${__calMonth}-${day}`] || [];
     const isToday = isCurrentMonth && today.getDate() === day;
     const namesHtml = list.slice(0, 3).map(m =>
       `<a class="calendar-birthday-tag" href="/pages/pastoral-member-detail.html?id=${m.id}">${esc(m.name)}${m.is_lunar ? '<span class="calendar-lunar-mark">음</span>' : ''}</a>`
