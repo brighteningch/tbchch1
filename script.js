@@ -157,7 +157,10 @@ function initHeroSlides(images) {
 // 주일 말씀 팝업 (설교 인포그래픽/주간묵상집/매일성경묵상/소그룹나눔 바로가기)
 function showSundayPopup() {
   const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  if (localStorage.getItem('verseModalDismissed') === todayStr) return;
+  if (localStorage.getItem('verseModalDismissed') === todayStr) {
+    showPressPopup();
+    return;
+  }
 
   const modal = document.getElementById('verseModal');
   modal.hidden = false;
@@ -167,6 +170,7 @@ function showSundayPopup() {
       localStorage.setItem('verseModalDismissed', todayStr);
     }
     modal.hidden = true;
+    showPressPopup();
   };
 
   document.getElementById('verseModalClose').addEventListener('click', close);
@@ -181,6 +185,28 @@ function showSundayPopup() {
   });
 }
 showSundayPopup();
+
+// 교회 소개 기사(활천 매거진) 팝업 — 주일 말씀 팝업 바로 뒤에 이어서 뜬다
+function showPressPopup() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem('pressModalDismissed') === todayStr) return;
+
+  const modal = document.getElementById('pressModal');
+  modal.hidden = false;
+
+  const close = () => {
+    if (document.getElementById('pressModalHideToday').checked) {
+      localStorage.setItem('pressModalDismissed', todayStr);
+    }
+    modal.hidden = true;
+  };
+
+  document.getElementById('pressModalClose').addEventListener('click', close);
+  document.getElementById('pressModalBackdrop').addEventListener('click', close);
+  document.addEventListener('keydown', function escClose(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
+  });
+}
 
 // 매일성경묵상: 관리자가 업로드한 묵상 이미지를 날짜별로 보여준다(weekly_content category='daily')
 let __devotionItems = [];

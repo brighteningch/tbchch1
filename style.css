@@ -161,6 +161,28 @@ body {
   color: var(--text-gray);
   cursor: pointer;
 }
+.press-modal-thumb-link { display: block; margin-bottom: 14px; }
+.press-modal-thumb {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 4px 14px rgba(15, 40, 70, 0.1);
+}
+.press-modal-desc { font-size: 14px; color: var(--text-gray); line-height: 1.5; margin-bottom: 16px; }
+.press-modal-cta {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+  text-decoration: none;
+}
+.press-modal-cta:hover { opacity: 0.9; }
 
 /* ---------- 찬양 듣기 플로팅 플레이어 ---------- */
 .praise-player {
