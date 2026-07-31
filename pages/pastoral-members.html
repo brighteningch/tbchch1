@@ -100,7 +100,10 @@ async function loadMembers() {
   }
   const tbody = document.getElementById('membersTbody');
   const empty = document.getElementById('membersEmpty');
-  document.getElementById('memberCount').textContent = `전체 ${members.length}명`;
+  const nonMemberCount = members.filter(m => m.is_church_member === false).length;
+  document.getElementById('memberCount').textContent = nonMemberCount > 0
+    ? `성도 ${members.length - nonMemberCount}명 (비성도 가족 ${nonMemberCount}명 포함)`
+    : `전체 ${members.length}명`;
   if (members.length === 0) {
     tbody.innerHTML = '';
     empty.hidden = false;
@@ -109,7 +112,7 @@ async function loadMembers() {
   empty.hidden = true;
   tbody.innerHTML = members.map(m => `
     <tr class="pastoral-row" data-id="${m.id}">
-      <td>${esc(m.name)}</td>
+      <td>${esc(m.name)}${m.is_church_member === false ? ' <span class="pastoral-status-badge">비성도</span>' : ''}</td>
       <td>${esc(m.position)}</td>
       <td>${esc(m.cell_groups ? m.cell_groups.name : '')}</td>
       <td>${formatBirth(m)}</td>

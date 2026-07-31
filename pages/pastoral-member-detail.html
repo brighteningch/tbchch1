@@ -69,6 +69,7 @@
       <label>메모
         <textarea id="fNote" rows="3" placeholder="특이사항, 확인 필요한 내용 등"></textarea>
       </label>
+      <label class="pastoral-lunar-check"><input type="checkbox" id="fIsChurchMember" checked> 우리 교회에 다니는 성도입니다 (해제하면 "비성도" — 성도 가족이지만 아직 안 나오는 전도대상자로 표시되고, 출석체크 목록에서는 빠집니다)</label>
       <div class="sermon-form-actions">
         <button type="submit" class="btn btn-primary" id="saveBtn">저장</button>
         <button type="button" class="btn btn-ghost" id="deleteBtn" hidden>이 성도 삭제</button>
@@ -92,6 +93,13 @@
         <select id="fRelatedMember"><option value="">성도 선택</option></select>
         <input type="text" id="fRelationType" placeholder="관계 (예: 배우자, 자녀, 며느리)">
         <button type="button" class="btn btn-ghost btn-sm" id="addFamilyBtn">추가</button>
+      </div>
+
+      <p class="pastoral-candidate-title">아직 우리 교회에 안 나오는 가족(자녀·손주 등)도 전도대상자로 남겨둘 수 있습니다</p>
+      <div class="pastoral-add-row">
+        <input type="text" id="fNewFamilyName" placeholder="이름">
+        <input type="text" id="fNewFamilyRelation" placeholder="관계 (예: 아들, 딸, 손주, 며느리)">
+        <button type="button" class="btn btn-ghost btn-sm" id="addNewFamilyBtn">비성도 가족으로 추가</button>
       </div>
 
       <div class="admin-toolbar" style="margin-top:40px;">
@@ -133,6 +141,7 @@ function readForm() {
     phone: document.getElementById('fPhone').value.trim() || null,
     address: document.getElementById('fAddress').value.trim() || null,
     note: document.getElementById('fNote').value.trim() || null,
+    is_church_member: document.getElementById('fIsChurchMember').checked,
   };
 }
 
@@ -148,6 +157,7 @@ function fillForm(m) {
   document.getElementById('fPhone').value = m.phone || '';
   document.getElementById('fAddress').value = m.address || '';
   document.getElementById('fNote').value = m.note || '';
+  document.getElementById('fIsChurchMember').checked = m.is_church_member !== false;
 }
 
 async function loadCellGroupOptions() {
@@ -374,6 +384,22 @@ async function initPastoralDetailPage() {
       document.getElementById('fRelatedMember').value = '';
       await loadFamilyList();
       await loadFamilyCandidates(member);
+    });
+
+    document.getElementById('addNewFamilyBtn').addEventListener('click', async () => {
+      const name = document.getElementById('fNewFamilyName').value.trim();
+      const relationType = document.getElementById('fNewFamilyRelation').value.trim();
+      if (!name || !relationType) { alert('이름과 관계를 모두 입력해주세요.'); return; }
+      const created = await createMember({ name, is_church_member: false, address: member.address || null });
+      await addFamilyRelation({ memberId, relatedMemberId: created.id, relationType });
+      const reverseType = REVERSE_RELATION[relationType];
+      if (reverseType) {
+        await addFamilyRelation({ memberId: created.id, relatedMemberId: memberId, relationType: reverseType });
+      }
+      document.getElementById('fNewFamilyName').value = '';
+      document.getElementById('fNewFamilyRelation').value = '';
+      await loadFamilyList();
+      await loadRelatedMemberOptions(memberId);
     });
 
     document.getElementById('addPrayerBtn').addEventListener('click', async () => {

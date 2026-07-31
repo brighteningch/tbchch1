@@ -153,7 +153,7 @@ async function initPastoralAttendancePage() {
   document.getElementById('fDate').value = todayStr();
 
   try {
-    const [members, groups] = await Promise.all([fetchMembers({}), fetchCellGroups()]);
+    const [members, groups] = await Promise.all([fetchMembers({ onlyChurchMembers: true }), fetchCellGroups()]);
     __members = members;
     const sel = document.getElementById('fCellGroup');
     groups.forEach(g => {

@@ -9,12 +9,13 @@ async function fetchCellGroups() {
   return data || [];
 }
 
-async function fetchMembers({ search, cellGroupId } = {}) {
+async function fetchMembers({ search, cellGroupId, onlyChurchMembers } = {}) {
   const sb = getSupabaseClient();
   if (!sb) return [];
   let q = sb.from("members").select("*, cell_groups(id, name, group_no)").order("name", { ascending: true });
   if (search) q = q.ilike("name", `%${search}%`);
   if (cellGroupId) q = q.eq("cell_group_id", cellGroupId);
+  if (onlyChurchMembers) q = q.eq("is_church_member", true);
   const { data, error } = await q;
   if (error) throw error;
   return data || [];
