@@ -28,14 +28,18 @@
     { "category": "교회학교", "name": "청소년&청년예배", "time": "오전 10:40", "location": "본당 3층" },
     { "category": "주중예배", "name": "수요예배", "time": "수요일 오후 7:30", "location": "본당" },
     { "category": "주중예배", "name": "금요예배", "time": "금요일 오후 8:00", "location": "본당" },
-    { "category": "주중예배", "name": "새벽기도", "time": "월~금 오전 5:00", "location": "본당" }
+    { "category": "주중예배", "name": "새벽기도", "time": "매일 오전 5:00", "location": "본당" }
   ],
   "sermon": {
     "youtube_channel_url": "https://www.youtube.com/channel/UCFEmEydneJGmF5DN9UYeTmA",
     "youtube_playlist_id": "UUFEmEydneJGmF5DN9UYeTmA"
   },
   "offering": {
-    "bank_info": "[계좌번호 입력 예정]",
+    "accounts": [
+      { "label": "일반헌금(십일조, 감사, 목적 등)", "info": "신협 131-016-982655" },
+      { "label": "선교헌금(선교, 구제)", "info": "신협 131-017-702302" },
+      { "label": "건축헌금", "info": "신협 131-018-700653" }
+    ],
     "holder": "빛나는교회",
     "note": "헌금 관련 문의는 아래 연락처로 부탁드립니다."
   },

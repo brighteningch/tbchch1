@@ -72,6 +72,13 @@ fetch('/content/site.json')
         </table>
       </div>`;
 
+    // 헌금안내: 계좌 목록 렌더
+    document.getElementById('offering-accounts').innerHTML = data.offering.accounts.map(a => `
+      <div class="offering-account">
+        <span class="offering-label">${a.label}</span>
+        <span class="offering-info">${a.info}</span>
+      </div>`).join('');
+
     // 빠른링크 예배시간 요약(1부/2부만)
     const w1 = data.worship[0], w2 = data.worship[1];
     if (w1 && w2) {
@@ -313,9 +320,9 @@ loadMissionVideo();
 
 // 말씀과 찬양 캐러셀: 탭 선택 시 해당 카테고리 최근 4개를 보여준다
 const SHOWCASE_TABS = [
-  { label: '주일예배', category: 'sermon-sunday' },
-  { label: '수요예배', category: 'sermon-wed' },
-  { label: '금요예배', category: 'sermon-fri' },
+  { label: '주일설교', category: 'sermon-sunday' },
+  { label: '수요설교', category: 'sermon-wed' },
+  { label: '금요설교', category: 'sermon-fri' },
 ];
 
 async function renderShowcaseRow(category) {

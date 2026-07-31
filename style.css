@@ -787,7 +787,8 @@ section { padding: 88px 0; }
 
 .showcase-tabs {
   display: flex;
-  gap: 10px;
+  justify-content: center;
+  gap: 12px;
   margin-bottom: 20px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -797,12 +798,12 @@ section { padding: 88px 0; }
 .showcase-tab {
   flex: none;
   white-space: nowrap;
-  padding: 9px 20px;
+  padding: 12px 26px;
   border-radius: 999px;
   border: 1px solid var(--border-light);
   background: #fff;
   color: var(--text-gray);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -978,9 +979,24 @@ section { padding: 88px 0; }
 /* Offering */
 .offering { background: var(--bg-warm); }
 .offering-box { background: #fff; border-radius: 16px; padding: 34px; text-align: center; box-shadow: 0 10px 30px rgba(15,40,70,0.06); }
-.offering-bank { font-size: 22px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
+.offering-accounts { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+.offering-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+.offering-account:last-child { border-bottom: none; padding-bottom: 0; }
+.offering-label { font-size: 15px; font-weight: 700; color: var(--text-gray); }
+.offering-info { font-size: 20px; font-weight: 800; color: var(--navy); }
 .offering-holder { color: var(--text-gray); margin-bottom: 14px; }
 .offering-note { font-size: 14px; color: var(--text-gray); }
+@media (max-width: 560px) {
+  .offering-account { flex-direction: column; gap: 4px; }
+}
 
 /* Visit */
 .visit { background: #fff; }
@@ -1064,8 +1080,8 @@ section { padding: 88px 0; }
   .qcard2-badge { font-size: 9px; padding: 3px 8px; }
   .qcard2 h3 { font-size: 13px; margin-bottom: 2px; }
   .qcard2 p { font-size: 10.5px; line-height: 1.25; }
-  .showcase-tabs { gap: 6px; margin-bottom: 14px; }
-  .showcase-tab { padding: 7px 14px; font-size: 12.5px; }
+  .showcase-tabs { gap: 8px; margin-bottom: 14px; }
+  .showcase-tab { padding: 10px 18px; font-size: 14px; }
   .showcase-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; overflow: visible; }
   .showcase-row .showcase-card { flex: none; }
   .showcase-nav { display: none; }
