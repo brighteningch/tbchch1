@@ -189,7 +189,10 @@ showSundayPopup();
 // 교회 소개 기사(활천 매거진) 팝업 — 주일 말씀 팝업 바로 뒤에 이어서 뜬다
 function showPressPopup() {
   const todayStr = new Date().toISOString().slice(0, 10);
-  if (localStorage.getItem('pressModalDismissed') === todayStr) return;
+  if (localStorage.getItem('pressModalDismissed') === todayStr) {
+    showProverbsPopup();
+    return;
+  }
 
   const modal = document.getElementById('pressModal');
   modal.hidden = false;
@@ -199,10 +202,33 @@ function showPressPopup() {
       localStorage.setItem('pressModalDismissed', todayStr);
     }
     modal.hidden = true;
+    showProverbsPopup();
   };
 
   document.getElementById('pressModalClose').addEventListener('click', close);
   document.getElementById('pressModalBackdrop').addEventListener('click', close);
+  document.addEventListener('keydown', function escClose(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
+  });
+}
+
+// 31일 잠언 묵상 새벽기도회 안내 팝업 — 활천 기사 팝업 바로 뒤에 이어서 뜬다
+function showProverbsPopup() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem('proverbsModalDismissed') === todayStr) return;
+
+  const modal = document.getElementById('proverbsModal');
+  modal.hidden = false;
+
+  const close = () => {
+    if (document.getElementById('proverbsModalHideToday').checked) {
+      localStorage.setItem('proverbsModalDismissed', todayStr);
+    }
+    modal.hidden = true;
+  };
+
+  document.getElementById('proverbsModalClose').addEventListener('click', close);
+  document.getElementById('proverbsModalBackdrop').addEventListener('click', close);
   document.addEventListener('keydown', function escClose(e) {
     if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
   });
