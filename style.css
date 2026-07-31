@@ -990,10 +990,9 @@ section { padding: 88px 0; }
   border-bottom: 1px solid var(--border-light);
 }
 .offering-account:last-child { border-bottom: none; padding-bottom: 0; }
-.offering-label { font-size: 15px; font-weight: 700; color: var(--text-gray); }
+.offering-label { font-size: 15px; font-weight: 800; color: var(--navy); }
 .offering-info { font-size: 20px; font-weight: 800; color: var(--navy); }
-.offering-holder { color: var(--text-gray); margin-bottom: 14px; }
-.offering-note { font-size: 14px; color: var(--text-gray); }
+.offering-holder { font-weight: 800; color: var(--navy); }
 @media (max-width: 560px) {
   .offering-account { flex-direction: column; gap: 4px; }
 }
