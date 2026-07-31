@@ -181,13 +181,26 @@ body {
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 .press-feature-card:hover { box-shadow: 0 14px 36px rgba(15, 40, 70, 0.1); transform: translateY(-2px); }
-.press-feature-thumb {
+.press-slideshow {
+  position: relative;
   width: 100%;
+  aspect-ratio: 4 / 3;
   max-height: 520px;
-  object-fit: cover;
   border-radius: 12px;
+  overflow: hidden;
   border: 1px solid var(--border-light);
+  background: var(--bg-cool);
 }
+.press-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.press-slide.is-active { opacity: 1; }
 .press-feature-body { display: flex; flex-direction: column; gap: 12px; text-align: center; }
 .press-feature-desc { font-size: 16px; color: var(--text-dark); line-height: 1.6; }
 .press-feature-cta { font-size: 15px; font-weight: 700; color: var(--navy); }
@@ -1019,7 +1032,8 @@ section { padding: 88px 0; }
 .gallery-album-card:hover { transform: translateY(-3px); }
 .gallery-album-thumb { width: 100%; padding-top: 66%; position: relative; background: var(--bg-cool); }
 .gallery-album-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.gallery-album-title { padding: 14px 16px 16px; font-weight: 700; font-size: 15px; text-align: center; }
+.gallery-album-title { padding: 14px 16px 0; font-weight: 700; font-size: 15px; text-align: center; }
+.gallery-album-date { padding: 4px 16px 16px; font-size: 12.5px; color: var(--text-gray); text-align: center; }
 
 /* 매일성경묵상 이미지 뷰어 */
 .devotion-image-wrap {
@@ -1034,6 +1048,14 @@ section { padding: 88px 0; }
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 .devotion-empty { color: #b9c8db; padding: 60px 0; text-align: center; }
+.devotion-download-btn {
+  display: block;
+  margin: 14px auto 0;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  border-color: rgba(255,255,255,0.25);
+}
+.devotion-download-btn:hover { background: rgba(255,255,255,0.18); }
 .devotion-date-list {
   display: flex;
   flex-wrap: wrap;
@@ -1181,7 +1203,8 @@ section { padding: 88px 0; }
   .gallery-cat-date { font-size: 11px; }
   .gallery-album-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .gallery-album-thumb { padding-top: 78%; }
-  .gallery-album-title { padding: 10px 10px 12px; font-size: 13px; }
+  .gallery-album-title { padding: 10px 10px 0; font-size: 13px; }
+  .gallery-album-date { padding: 3px 10px 12px; font-size: 11px; }
   .gallery-desc { margin-bottom: 16px; }
   #kakaoMap { height: 260px !important; }
 }

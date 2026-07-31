@@ -55,6 +55,7 @@
 <script src="/common.js"></script>
 <script>
 function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function formatAlbumDate(d) { return d ? d.replace(/-/g, '.') : ''; }
 const GALLERY_PER_PAGE = 9;
 let __galleryAlbums = [];
 let __galleryCategory = '전체';
@@ -82,10 +83,12 @@ function renderAlbumPage(page) {
           : `<div class="gallery-cat-thumb-empty">사진 없음</div>`}
       </div>
       <p class="gallery-album-title">${escHtml(a.title)}</p>
+      <p class="gallery-album-date">${formatAlbumDate(a.album_date)}</p>
     </button>`).join('');
 
   grid.querySelectorAll('[data-album-id]').forEach(btn => {
-    btn.addEventListener('click', () => openAlbumLightbox(btn.dataset.albumId, btn.querySelector('.gallery-album-title').textContent));
+    const album = __galleryAlbums.find(a => a.id === btn.dataset.albumId);
+    btn.addEventListener('click', () => openAlbumLightbox(album));
   });
 
   renderPagination(paginationEl, __galleryAlbums.length, GALLERY_PER_PAGE, page, renderAlbumPage);
@@ -104,7 +107,9 @@ async function loadAlbums() {
   }
 }
 
-async function openAlbumLightbox(albumId, title) {
+async function openAlbumLightbox(album) {
+  const title = album.title;
+  const dateLabel = formatAlbumDate(album.album_date);
   const box = document.getElementById('photoLightbox');
   document.getElementById('lightboxTitle').textContent = title || '';
   document.getElementById('lightboxSub').textContent = '불러오는 중...';
@@ -114,8 +119,8 @@ async function openAlbumLightbox(albumId, title) {
   box.hidden = false;
 
   try {
-    const photos = await fetchGalleryPhotos(albumId);
-    document.getElementById('lightboxSub').textContent = `사진 ${photos.length}장`;
+    const photos = await fetchGalleryPhotos(album.id);
+    document.getElementById('lightboxSub').textContent = [dateLabel, `사진 ${photos.length}장`].filter(Boolean).join(' · ');
     grid.innerHTML = photos.length
       ? photos.map(p => `<img src="${p.image_url}" alt="${escHtml(title)}" loading="lazy">`).join('')
       : '<p class="lightbox-loading">등록된 사진이 없습니다.</p>';

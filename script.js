@@ -28,6 +28,7 @@ function loadGallery(previewId) {
               : `<div class="gallery-cat-thumb-empty">사진 없음</div>`}
           </div>
           <p class="gallery-album-title">${a.title}</p>
+          <p class="gallery-album-date">${(a.album_date || '').replace(/-/g, '.')}</p>
         </a>`).join('');
     })
     .catch(() => {
@@ -145,6 +146,21 @@ function initHeroSlides(images) {
   }
 }
 
+// 활천 매거진 카드: 사진 3장을 5초 간격으로 계속 반복 전환
+function initPressSlideshow() {
+  const wrap = document.getElementById('pressSlideshow');
+  if (!wrap) return;
+  const slides = wrap.querySelectorAll('.press-slide');
+  if (slides.length <= 1) return;
+  let current = 0;
+  setInterval(() => {
+    slides[current].classList.remove('is-active');
+    current = (current + 1) % slides.length;
+    slides[current].classList.add('is-active');
+  }, 5000);
+}
+initPressSlideshow();
+
 // 주일 말씀 팝업 (설교 인포그래픽/주간묵상집/매일성경묵상/소그룹나눔 바로가기)
 function showSundayPopup() {
   const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -170,9 +186,11 @@ function showSundayPopup() {
     if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
   });
 
-  document.getElementById('verseModalDailyBtn').addEventListener('click', () => {
-    modal.hidden = true;
-    openDevotionLightbox();
+  document.querySelectorAll('#verseModal [data-content-category]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.hidden = true;
+      openContentLightbox(btn.dataset.contentCategory);
+    });
   });
 }
 showSundayPopup();
@@ -199,35 +217,73 @@ function showProverbsPopup() {
   });
 }
 
-// 매일성경묵상: 관리자가 업로드한 묵상 이미지를 날짜별로 보여준다(weekly_content category='daily')
-let __devotionItems = [];
+// 주일 말씀 팝업 메뉴 4종(설교 인포그래픽/주간묵상집/매일성경묵상/소그룹자료) 공용:
+// 관리자가 카테고리별로 업로드한 이미지를 날짜별로 보여준다(weekly_content 테이블)
+const CONTENT_CATEGORY_LABELS = { infographic: '설교 인포그래픽', daily: '매일성경묵상', share: '소그룹자료' };
+let __contentItemsByCategory = {};
+let __currentContentCategory = 'daily';
 
-function showDevotion(index) {
-  const item = __devotionItems[index];
+let __currentDevotionImage = null; // { url, filename } — 다운로드 버튼이 참조
+
+function showContentItem(index) {
+  const items = __contentItemsByCategory[__currentContentCategory] || [];
+  const item = items[index];
   if (!item) return;
-  document.getElementById('devotionImage').src = (item.data && item.data.imageUrl) || '';
+  const imageUrl = (item.data && item.data.imageUrl) || '';
+  document.getElementById('devotionImage').src = imageUrl;
   document.getElementById('devotionDate').textContent = item.period || '';
   document.querySelectorAll('#devotionDateList button').forEach((b, i) => b.classList.toggle('is-active', i === index));
+  const label = CONTENT_CATEGORY_LABELS[__currentContentCategory] || '이미지';
+  const lastSegment = imageUrl.split('?')[0].split('/').pop() || '';
+  const ext = lastSegment.includes('.') ? lastSegment.split('.').pop() : 'jpg';
+  __currentDevotionImage = imageUrl ? { url: imageUrl, filename: `${label}_${item.period || ''}.${ext}` } : null;
 }
 
-function renderDevotionDateList() {
+// Supabase Storage 이미지는 다른 도메인이라 <a download>가 그냥 안 먹는다(크로스오리진).
+// blob으로 직접 받아와 다운로드시키고, 그것도 안 되면 새 탭으로 열어 사용자가 저장하게 한다.
+async function downloadCurrentDevotionImage() {
+  if (!__currentDevotionImage) return;
+  const { url, filename } = __currentDevotionImage;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    window.open(url, '_blank');
+  }
+}
+document.getElementById('devotionDownloadBtn').addEventListener('click', downloadCurrentDevotionImage);
+
+function renderContentDateList() {
+  const items = __contentItemsByCategory[__currentContentCategory] || [];
   const wrap = document.getElementById('devotionDateList');
-  wrap.innerHTML = __devotionItems.slice(0, 14).map((item, i) =>
+  wrap.innerHTML = items.slice(0, 14).map((item, i) =>
     `<button type="button" data-i="${i}">${(item.period || '').slice(5) || (item.title || '')}</button>`).join('');
-  wrap.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => showDevotion(Number(btn.dataset.i))));
+  wrap.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => showContentItem(Number(btn.dataset.i))));
 }
 
-async function openDevotionLightbox() {
+async function openContentLightbox(category) {
+  __currentContentCategory = category;
   const lb = document.getElementById('devotionLightbox');
   const img = document.getElementById('devotionImage');
   const empty = document.getElementById('devotionEmpty');
+  document.getElementById('devotionTitle').textContent = CONTENT_CATEGORY_LABELS[category] || '';
   lb.hidden = false;
   try {
-    if (__devotionItems.length === 0) __devotionItems = await fetchWeeklyContent('daily');
+    if (!__contentItemsByCategory[category]) __contentItemsByCategory[category] = await fetchWeeklyContent(category);
   } catch (err) {
-    console.error('매일성경묵상 로드 실패:', err);
+    console.error(`${CONTENT_CATEGORY_LABELS[category]} 로드 실패:`, err);
+    __contentItemsByCategory[category] = __contentItemsByCategory[category] || [];
   }
-  if (__devotionItems.length === 0) {
+  const items = __contentItemsByCategory[category];
+  if (items.length === 0) {
     img.hidden = true;
     empty.hidden = false;
     document.getElementById('devotionDate').textContent = '';
@@ -236,8 +292,14 @@ async function openDevotionLightbox() {
   }
   img.hidden = false;
   empty.hidden = true;
-  renderDevotionDateList();
-  showDevotion(0);
+  renderContentDateList();
+  // 오늘 날짜에 맞는 항목이 있으면 그걸 먼저 보여주고, 없으면 가장 최근 항목을 보여준다
+  // (매일성경묵상처럼 한 주 분량을 미리 올려두면 목록엔 미래 날짜도 섞여 있을 수 있어서 필요)
+  // 로컬 달력 날짜를 써야 한다 — toISOString()은 UTC라서 한국시간(UTC+9) 자정~9시 사이엔 전날로 나온다.
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const todayIndex = items.findIndex(it => it.period === todayStr);
+  showContentItem(todayIndex >= 0 ? todayIndex : 0);
 }
 
 document.getElementById('devotionLightboxClose').addEventListener('click', () => {
@@ -309,22 +371,16 @@ function showcaseCard(item, isMain) {
     </a>`;
 }
 
-// 미션 스테이트먼트 영역의 곱씹다 (최신 1건 인라인 재생)
-function youtubeEmbedUrl(url) {
-  if (!url) return null;
-  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
-  return m ? `https://www.youtube.com/embed/${m[1]}` : null;
-}
-
+// 미션 스테이트먼트 영역의 곱씹다 (최신 1건 인라인 재생) — 유튜브 재생목록에서 바로 가져온다
 async function loadMissionVideo() {
   const el = document.getElementById('mission-media');
   if (!el) return;
   try {
-    const items = await fetchSermons('3min');
-    const latest = items[0];
-    const embedUrl = latest && youtubeEmbedUrl(latest.video_url);
-    if (embedUrl) {
-      el.innerHTML = `<iframe src="${embedUrl}" title="${showcaseEsc(latest.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+    const res = await fetch('/.netlify/functions/youtube-playlist');
+    const data = await res.json();
+    const latest = (data.items || [])[0];
+    if (latest) {
+      el.innerHTML = `<iframe src="https://www.youtube.com/embed/${latest.videoId}" title="${showcaseEsc(latest.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
     } else {
       el.innerHTML = '<div class="mission-media-empty">곱씹다 영상이 곧 올라올 예정입니다.</div>';
     }

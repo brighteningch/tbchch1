@@ -10,8 +10,7 @@
       { "image": "/admin/uploads/hero/hero-003.jpg", "overlay": false },
       { "image": "/admin/uploads/hero/hero-004.jpg", "overlay": false },
       { "image": "/admin/uploads/hero/hero-005.jpg", "overlay": false },
-      { "image": "/admin/uploads/hero/hero-006.jpg", "overlay": false },
-      { "image": "/admin/uploads/hero/hero-007.jpg", "overlay": false }
+      { "image": "/admin/uploads/hero/hero-006.jpg", "overlay": false }
     ]
   },
   "about": {

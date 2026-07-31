@@ -16,36 +16,28 @@
   <div class="verse-modal-box">
     <button class="verse-modal-close" id="verseModalClose" aria-label="닫기">✕</button>
     <p class="verse-modal-title">주일 말씀을 되새겨요</p>
-    <!-- TODO: 링크 준비되면 각 항목의 href를 실제 주소로 교체 -->
     <div class="verse-modal-menu">
-      <a class="verse-modal-menu-item" href="https://aqkrwlghks-ai.github.io/weekly-word/#/infographic" target="_blank" rel="noopener">
+      <button type="button" class="verse-modal-menu-item" data-content-category="infographic">
         <span class="verse-modal-menu-icon">🎨</span>
         <span class="verse-modal-menu-copy">
           <span class="verse-modal-menu-title">설교 인포그래픽</span>
           <span class="verse-modal-menu-desc">주일 말씀 정리</span>
         </span>
-      </a>
-      <a class="verse-modal-menu-item" href="https://aqkrwlghks-ai.github.io/weekly-word/#/weekly" target="_blank" rel="noopener">
-        <span class="verse-modal-menu-icon">📖</span>
-        <span class="verse-modal-menu-copy">
-          <span class="verse-modal-menu-title">주간묵상집</span>
-          <span class="verse-modal-menu-desc">말씀이 삶이 되는 순간</span>
-        </span>
-      </a>
-      <button type="button" class="verse-modal-menu-item" id="verseModalDailyBtn">
+      </button>
+      <button type="button" class="verse-modal-menu-item" data-content-category="daily">
         <span class="verse-modal-menu-icon">🙏</span>
         <span class="verse-modal-menu-copy">
           <span class="verse-modal-menu-title">매일성경묵상</span>
           <span class="verse-modal-menu-desc">말씀과 동행하는 삶</span>
         </span>
       </button>
-      <a class="verse-modal-menu-item" href="https://aqkrwlghks-ai.github.io/weekly-word/#/share" target="_blank" rel="noopener">
+      <button type="button" class="verse-modal-menu-item" data-content-category="share">
         <span class="verse-modal-menu-icon">🤝</span>
         <span class="verse-modal-menu-copy">
-          <span class="verse-modal-menu-title">소그룹나눔</span>
+          <span class="verse-modal-menu-title">소그룹자료</span>
           <span class="verse-modal-menu-desc">삶을 나누는 시간</span>
         </span>
-      </a>
+      </button>
     </div>
     <label class="verse-modal-hide">
       <input type="checkbox" id="verseModalHideToday"> 오늘 하루 열지 않기
@@ -140,7 +132,11 @@
     <p class="eyebrow">CHURCH NEWS</p>
     <h2 class="section-title">빛나는교회, 활천 매거진에 소개됐어요</h2>
     <a class="press-feature-card" href="/content/press/hwalcheon-202608-brighteningch.pdf" target="_blank" rel="noopener">
-      <img class="press-feature-thumb" src="/content/press/hwalcheon-202608-thumb.jpg" alt="상처 입은 영혼들의 피난처, 계룡 빛나는교회 - 활천 2026년 8월호">
+      <div class="press-slideshow" id="pressSlideshow">
+        <img class="press-slide is-active" src="/content/press/hwalcheon-202608-slide-1.jpg" alt="상처 입은 영혼들의 피난처, 계룡 빛나는교회 - 활천 2026년 8월호 1페이지">
+        <img class="press-slide" src="/content/press/hwalcheon-202608-slide-2.jpg" alt="상처 입은 영혼들의 피난처, 계룡 빛나는교회 - 활천 2026년 8월호 2페이지">
+        <img class="press-slide" src="/content/press/hwalcheon-202608-slide-3.jpg" alt="상처 입은 영혼들의 피난처, 계룡 빛나는교회 - 활천 2026년 8월호 3페이지">
+      </div>
       <div class="press-feature-body">
         <p class="press-feature-desc">“상처 입은 영혼들의 피난처, 계룡 빛나는교회” — 활천 2026년 8월호에 실린 우리 교회 이야기를 만나보세요.</p>
         <span class="press-feature-cta">기사 전체보기 (PDF) →</span>
@@ -218,15 +214,16 @@
 <div class="photo-lightbox" id="devotionLightbox" hidden>
   <div class="lightbox-header">
     <div>
-      <p class="lightbox-title">매일성경묵상</p>
+      <p class="lightbox-title" id="devotionTitle">매일성경묵상</p>
       <p class="lightbox-sub" id="devotionDate"></p>
     </div>
     <button class="lightbox-close" id="devotionLightboxClose" aria-label="닫기">✕</button>
   </div>
   <div class="lightbox-body">
     <div class="devotion-image-wrap">
-      <img id="devotionImage" alt="매일성경묵상">
-      <p class="devotion-empty" id="devotionEmpty" hidden>아직 등록된 묵상 이미지가 없습니다.</p>
+      <img id="devotionImage" alt="">
+      <p class="devotion-empty" id="devotionEmpty" hidden>아직 등록된 이미지가 없습니다.</p>
+      <button type="button" class="btn btn-ghost btn-sm devotion-download-btn" id="devotionDownloadBtn">⬇ 이미지 다운로드</button>
     </div>
     <div class="devotion-date-list" id="devotionDateList"></div>
   </div>
