@@ -171,8 +171,8 @@ body {
 /* ---------- 홈페이지 언론보도 카드 (활천 매거진 등) ---------- */
 .press-feature-card {
   display: flex;
-  align-items: center;
-  gap: 24px;
+  flex-direction: column;
+  gap: 20px;
   background: #fff;
   border-radius: 16px;
   padding: 20px;
@@ -182,20 +182,15 @@ body {
 }
 .press-feature-card:hover { box-shadow: 0 14px 36px rgba(15, 40, 70, 0.1); transform: translateY(-2px); }
 .press-feature-thumb {
-  width: 140px;
-  height: 140px;
+  width: 100%;
+  max-height: 520px;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--border-light);
-  flex-shrink: 0;
 }
-.press-feature-body { display: flex; flex-direction: column; gap: 10px; }
-.press-feature-desc { font-size: 15px; color: var(--text-dark); line-height: 1.5; }
-.press-feature-cta { font-size: 14px; font-weight: 700; color: var(--navy); }
-@media (max-width: 560px) {
-  .press-feature-card { flex-direction: column; align-items: flex-start; gap: 14px; }
-  .press-feature-thumb { width: 100%; height: auto; aspect-ratio: 4/3; }
-}
+.press-feature-body { display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.press-feature-desc { font-size: 16px; color: var(--text-dark); line-height: 1.6; }
+.press-feature-cta { font-size: 15px; font-weight: 700; color: var(--navy); }
 
 /* ---------- 찬양 듣기 플로팅 플레이어 ---------- */
 .praise-player {
