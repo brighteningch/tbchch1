@@ -82,7 +82,13 @@
       </div>
       <div id="familyList" class="pastoral-list"></div>
       <p class="pastoral-empty" id="familyEmpty" hidden>등록된 가족관계가 없습니다.</p>
-      <div class="pastoral-add-row">
+
+      <p class="pastoral-candidate-title" id="candidateTitle" hidden>같은 주소의 성도 — 나이·성별로 관계를 추정했습니다. 확인 후 체크해서 추가하세요.</p>
+      <div id="familyCandidates" class="pastoral-family-candidates"></div>
+      <p class="pastoral-empty" id="candidateEmpty" hidden>같은 주소로 등록된 다른 성도가 없습니다.</p>
+      <button type="button" class="btn btn-ghost btn-sm" id="addCandidatesBtn" hidden>체크한 가족관계 추가</button>
+
+      <div class="pastoral-add-row" style="margin-top:14px;">
         <select id="fRelatedMember"><option value="">성도 선택</option></select>
         <input type="text" id="fRelationType" placeholder="관계 (예: 배우자, 자녀, 며느리)">
         <button type="button" class="btn btn-ghost btn-sm" id="addFamilyBtn">추가</button>
@@ -179,15 +185,106 @@ async function loadFamilyList() {
   wrap.innerHTML = list.map(r => `
     <div class="pastoral-list-item">
       <span><strong>${esc(r.relation_type)}</strong> · ${esc(r.related_member ? r.related_member.name : '(삭제된 성도)')}${r.related_member && r.related_member.position ? ' (' + esc(r.related_member.position) + ')' : ''}</span>
-      <button type="button" class="btn btn-ghost btn-sm" data-remove-family="${r.id}">삭제</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-remove-family="${r.id}" data-related-id="${r.related_member_id}">삭제</button>
     </div>`).join('');
   wrap.querySelectorAll('[data-remove-family]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('이 가족관계를 삭제할까요?')) return;
+      if (!confirm('이 가족관계를 삭제할까요? (상대방 쪽에 남긴 대응 관계도 함께 지워집니다)')) return;
       await deleteFamilyRelation(btn.dataset.removeFamily);
+      await deleteFamilyRelationPair(memberId, btn.dataset.relatedId);
       await loadFamilyList();
+      if (window.__currentMember) await loadFamilyCandidates(window.__currentMember);
     });
   });
+}
+
+// 관계 추정: 같은 주소 + 나이차이(생년) + 성별로 부부/부모/자녀를 추정한다.
+// 확실하지 않으면 추정하지 않고 목회자가 직접 고르도록 빈 값을 준다.
+function suggestFamilyRelation(current, candidate) {
+  if (!current.birth_year || !candidate.birth_year) {
+    return { type: '', label: '나이 정보가 없어 추정할 수 없습니다 — 직접 선택해주세요' };
+  }
+  const gap = Math.abs(current.birth_year - candidate.birth_year);
+  const oppositeGender = current.gender && candidate.gender && current.gender !== candidate.gender;
+  if (oppositeGender && gap <= 15) {
+    return { type: '배우자', label: `배우자로 추정 (나이차 ${gap}세)` };
+  }
+  if (gap >= 15) {
+    return current.birth_year < candidate.birth_year
+      ? { type: '자녀', label: `자녀로 추정 (나이차 ${gap}세)` }
+      : { type: '부모', label: `부모로 추정 (나이차 ${gap}세)` };
+  }
+  return { type: '', label: `추정 어려움(나이차 ${gap}세) — 직접 선택해주세요` };
+}
+
+// 관계를 추가할 때 상대방 쪽에도 대응되는 관계를 함께 남겨 양쪽 화면에서 모두 보이게 한다
+const REVERSE_RELATION = { '배우자': '배우자', '부모': '자녀', '자녀': '부모' };
+
+async function loadFamilyCandidates(member) {
+  const titleEl = document.getElementById('candidateTitle');
+  const wrap = document.getElementById('familyCandidates');
+  const emptyEl = document.getElementById('candidateEmpty');
+  const addBtn = document.getElementById('addCandidatesBtn');
+
+  if (!member.address) {
+    titleEl.hidden = true;
+    wrap.innerHTML = '';
+    emptyEl.hidden = false;
+    emptyEl.textContent = '주소가 등록되어 있지 않아 가족 후보를 찾을 수 없습니다.';
+    addBtn.hidden = true;
+    return;
+  }
+
+  const [sameAddress, existingRelations] = await Promise.all([
+    fetchMembersByAddress(member.address, memberId),
+    fetchFamilyRelations(memberId),
+  ]);
+  const alreadyLinked = new Set(existingRelations.map(r => r.related_member_id));
+  const candidates = sameAddress.filter(m => !alreadyLinked.has(m.id));
+
+  if (candidates.length === 0) {
+    titleEl.hidden = true;
+    wrap.innerHTML = '';
+    emptyEl.hidden = false;
+    emptyEl.textContent = '같은 주소로 등록된, 아직 연결하지 않은 성도가 없습니다.';
+    addBtn.hidden = true;
+    return;
+  }
+
+  emptyEl.hidden = true;
+  titleEl.hidden = false;
+  addBtn.hidden = false;
+
+  wrap.innerHTML = candidates.map(c => {
+    const sug = suggestFamilyRelation(member, c);
+    return `
+      <label class="pastoral-candidate-row">
+        <input type="checkbox" data-candidate-id="${c.id}">
+        <span class="pastoral-candidate-name">${esc(c.name)}${c.position ? ' (' + esc(c.position) + ')' : ''}</span>
+        <select data-candidate-select="${c.id}">
+          <option value="배우자"${sug.type === '배우자' ? ' selected' : ''}>배우자</option>
+          <option value="부모"${sug.type === '부모' ? ' selected' : ''}>부모</option>
+          <option value="자녀"${sug.type === '자녀' ? ' selected' : ''}>자녀</option>
+        </select>
+        <span class="pastoral-candidate-hint">${esc(sug.label)}</span>
+      </label>`;
+  }).join('');
+
+  addBtn.onclick = async () => {
+    const checked = wrap.querySelectorAll('input[type="checkbox"]:checked');
+    if (checked.length === 0) { alert('추가할 성도를 체크해주세요.'); return; }
+    for (const cb of checked) {
+      const relatedId = cb.dataset.candidateId;
+      const relationType = wrap.querySelector(`[data-candidate-select="${relatedId}"]`).value;
+      await addFamilyRelation({ memberId, relatedMemberId: relatedId, relationType });
+      const reverseType = REVERSE_RELATION[relationType];
+      if (reverseType) {
+        await addFamilyRelation({ memberId: relatedId, relatedMemberId: memberId, relationType: reverseType });
+      }
+    }
+    await loadFamilyList();
+    await loadFamilyCandidates(member);
+  };
 }
 
 async function loadPrayerList() {
@@ -244,11 +341,13 @@ async function initPastoralDetailPage() {
     if (!isNew && memberId) {
       document.getElementById('pageTitle').textContent = '성도 정보 수정';
       member = await fetchMemberById(memberId);
+      window.__currentMember = member;
       fillForm(member);
       document.getElementById('deleteBtn').hidden = false;
       document.getElementById('relatedSections').hidden = false;
       await loadRelatedMemberOptions(memberId);
       await loadFamilyList();
+      await loadFamilyCandidates(member);
       await loadPrayerList();
     } else {
       document.getElementById('pageTitle').textContent = '새 성도 등록';
@@ -267,9 +366,14 @@ async function initPastoralDetailPage() {
       const relationType = document.getElementById('fRelationType').value.trim();
       if (!relatedMemberId || !relationType) { alert('성도와 관계를 모두 입력해주세요.'); return; }
       await addFamilyRelation({ memberId, relatedMemberId, relationType });
+      const reverseType = REVERSE_RELATION[relationType];
+      if (reverseType) {
+        await addFamilyRelation({ memberId: relatedMemberId, relatedMemberId: memberId, relationType: reverseType });
+      }
       document.getElementById('fRelationType').value = '';
       document.getElementById('fRelatedMember').value = '';
       await loadFamilyList();
+      await loadFamilyCandidates(member);
     });
 
     document.getElementById('addPrayerBtn').addEventListener('click', async () => {

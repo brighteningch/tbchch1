@@ -73,6 +73,18 @@ async function fetchFamilyRelations(memberId) {
   return data.map(r => ({ ...r, related_member: byId[r.related_member_id] || null }));
 }
 
+// 같은 주소를 쓰는 다른 성도들 — 가족관계 후보 추천에 사용 (본인 제외)
+async function fetchMembersByAddress(address, excludeId) {
+  const sb = getSupabaseClient();
+  if (!sb || !address) return [];
+  const { data, error } = await sb.from("members")
+    .select("id, name, position, gender, birth_year")
+    .eq("address", address)
+    .neq("id", excludeId);
+  if (error) throw error;
+  return data || [];
+}
+
 async function addFamilyRelation({ memberId, relatedMemberId, relationType, note }) {
   const sb = requireSupabaseClient();
   const { data, error } = await sb.from("family_relations")
@@ -85,6 +97,14 @@ async function addFamilyRelation({ memberId, relatedMemberId, relationType, note
 async function deleteFamilyRelation(id) {
   const sb = requireSupabaseClient();
   const { error } = await sb.from("family_relations").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// 양방향으로 만들어둔 관계는 반대쪽(상대방→나) 행도 함께 지워야 정보가 어긋나지 않는다
+async function deleteFamilyRelationPair(memberId, relatedMemberId) {
+  const sb = requireSupabaseClient();
+  const { error } = await sb.from("family_relations").delete()
+    .eq("member_id", relatedMemberId).eq("related_member_id", memberId);
   if (error) throw error;
 }
 
