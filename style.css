@@ -969,6 +969,58 @@ section { padding: 88px 0; }
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
 
+/* 앨범 안 사진 전체보기 — 세로로 쭉 이어 보여준다(자체 갤러리 상세) */
+.lightbox-grid--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+.lightbox-grid--stack img { width: 100%; border-radius: 10px; display: block; }
+
+/* 포토갤러리 카테고리 탭 */
+.gallery-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+.gallery-tab {
+  flex: none;
+  padding: 9px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: #fff;
+  color: var(--text-gray);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.gallery-tab:hover { border-color: var(--green); }
+.gallery-tab.is-active { background: var(--green); border-color: var(--green); color: #fff; }
+
+/* 포토갤러리 앨범 그리드 */
+.gallery-album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+.gallery-album-card {
+  display: block;
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  width: 100%;
+  padding: 0;
+  box-shadow: 0 10px 30px rgba(15,40,70,0.06);
+  transition: transform 0.15s ease;
+}
+.gallery-album-card:hover { transform: translateY(-3px); }
+.gallery-album-thumb { width: 100%; padding-top: 66%; position: relative; background: var(--bg-cool); }
+.gallery-album-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery-album-title { padding: 14px 16px 16px; font-weight: 700; font-size: 15px; text-align: center; }
+
 /* 매일성경묵상 이미지 뷰어 */
 .devotion-image-wrap {
   max-width: 480px;
@@ -1127,6 +1179,9 @@ section { padding: 88px 0; }
   .gallery-cat-name { font-size: 13.5px; margin-bottom: 2px; }
   .gallery-cat-label { font-size: 10px; }
   .gallery-cat-date { font-size: 11px; }
+  .gallery-album-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .gallery-album-thumb { padding-top: 78%; }
+  .gallery-album-title { padding: 10px 10px 12px; font-size: 13px; }
   .gallery-desc { margin-bottom: 16px; }
   #kakaoMap { height: 260px !important; }
 }

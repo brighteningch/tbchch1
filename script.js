@@ -5,43 +5,34 @@ function formatDate(iso) {
   return iso.slice(0, 10);
 }
 
-// 구글드라이브 카테고리 4개(행사사진/청소년&청년/예배사진/교회학교)를 불러와 카드로 그린다 (Netlify Function 경유)
-// 카드를 클릭하면 그 카테고리 안의 행사 폴더 목록이 최신순으로 뜬다 (common.js의 openCategoryLightbox)
-function loadGallery(catGridId) {
-  const catGridEl = document.getElementById(catGridId);
-  if (!catGridEl) return;
+// 홈페이지 갤러리 미리보기: 자체 저장된 앨범 중 최신 3개만 보여주고, 전체는 /pages/news-gallery.html 에서 본다
+function loadGallery(previewId) {
+  const wrap = document.getElementById(previewId);
+  const emptyEl = document.getElementById('gallery-preview-empty');
+  if (!wrap) return;
 
-  fetch('/.netlify/functions/drive-photos')
-    .then(res => res.json())
-    .then(data => {
-      const categories = data.categories || [];
-      if (data.error || categories.length === 0) {
-        catGridEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
+  fetchGalleryAlbums()
+    .then(albums => {
+      const preview = albums.slice(0, 3);
+      if (preview.length === 0) {
+        wrap.innerHTML = '';
+        if (emptyEl) emptyEl.hidden = false;
         return;
       }
-
-      catGridEl.innerHTML = categories.map((cat, i) => `
-        <button type="button" class="gallery-cat-card" data-cat-index="${i}">
-          <div class="gallery-cat-thumb">
-            ${cat.thumb
-              ? `<img src="${cat.thumb}" alt="${cat.name}" loading="lazy">`
+      if (emptyEl) emptyEl.hidden = true;
+      wrap.innerHTML = preview.map(a => `
+        <a class="gallery-album-card" href="/pages/news-gallery.html">
+          <div class="gallery-album-thumb">
+            ${a.cover_image_url
+              ? `<img src="${a.cover_image_url}" alt="${a.title}" loading="lazy">`
               : `<div class="gallery-cat-thumb-empty">사진 없음</div>`}
-            <span class="gallery-cat-count">${cat.count}개</span>
           </div>
-          <div>
-            <p class="gallery-cat-label">카테고리</p>
-            <p class="gallery-cat-name">${cat.name}</p>
-            <p class="gallery-cat-date">${cat.date ? formatDate(cat.date) + ' 업데이트' : '최근 업데이트 없음'}</p>
-          </div>
-        </button>`).join('');
-
-      catGridEl.querySelectorAll('[data-cat-index]').forEach(btn => {
-        const cat = categories[Number(btn.dataset.catIndex)];
-        btn.addEventListener('click', () => openCategoryLightbox(cat.id, cat.name));
-      });
+          <p class="gallery-album-title">${a.title}</p>
+        </a>`).join('');
     })
     .catch(() => {
-      catGridEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
+      wrap.innerHTML = '';
+      if (emptyEl) emptyEl.hidden = false;
     });
 }
 
@@ -96,7 +87,7 @@ fetch('/content/site.json')
     }
 
     // 갤러리: 카테고리 4개 요약
-    loadGallery('gallery-cat-grid');
+    loadGallery('gallery-album-preview');
 
     // 메인 배경 사진 슬라이드 (15초마다 자동 전환)
     initHeroSlides(data.hero.images);

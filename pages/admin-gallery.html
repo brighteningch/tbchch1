@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>포토갤러리 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>✦</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .field-hint { font-size:12.5px; color:var(--text-gray); margin-top:-8px; }
+  .ga-thumb { width:64px; height:64px; object-fit:cover; border-radius:8px; display:block; }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">ADMIN</span>
+  <h1>포토갤러리 관리</h1>
+  <p>행사·예배·다음세대 사진을 앨범 단위로 올리고 관리합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="adminGuard" class="admin-guard" hidden>
+    <p>관리자만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="adminContent" hidden>
+    <a href="/pages/news-gallery.html" class="btn btn-ghost btn-sm">← 포토갤러리로</a>
+
+    <form id="form-album" class="sermon-form" style="margin-top:20px;">
+      <div class="sermon-form-row">
+        <label>카테고리
+          <select id="ga-category" required>
+            <option value="예배">예배</option>
+            <option value="다음세대">다음세대</option>
+            <option value="행사">행사</option>
+          </select>
+        </label>
+        <label>날짜
+          <input type="date" id="ga-date">
+        </label>
+      </div>
+      <label>제목
+        <input type="text" id="ga-title" required placeholder="예: 2026.07.26 주일예배">
+      </label>
+      <label>사진 파일 (여러 장 선택 가능)
+        <input type="file" id="ga-images" accept="image/*" multiple required>
+      </label>
+      <p class="field-hint">여러 장을 한 번에 선택해서 올리면 하나의 앨범으로 묶입니다. 첫 번째 사진이 목록의 대표 사진으로 쓰입니다.</p>
+      <div class="sermon-form-actions">
+        <button type="submit" class="btn btn-primary" id="ga-submit-btn">앨범 등록</button>
+      </div>
+      <p class="auth-error" id="ga-error" hidden></p>
+    </form>
+
+    <div class="admin-toolbar" style="margin-top:36px;">
+      <p style="font-weight:700;">등록된 앨범</p>
+    </div>
+    <div class="sermon-table-wrap">
+      <table class="sermon-table">
+        <thead><tr><th>대표사진</th><th>제목</th><th>카테고리</th><th>날짜</th><th>관리</th></tr></thead>
+        <tbody id="ga-tbody"></tbody>
+      </table>
+    </div>
+    <p class="sermon-empty" id="ga-empty" hidden>등록된 앨범이 없습니다.</p>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/gallery-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const GALLERY_BUCKET = 'gallery-images';
+
+let __gaAlbums = [];
+
+async function loadAlbumList() {
+  __gaAlbums = await fetchGalleryAlbums();
+  const tbody = document.getElementById('ga-tbody');
+  const empty = document.getElementById('ga-empty');
+  if (__gaAlbums.length === 0) { tbody.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  tbody.innerHTML = __gaAlbums.map(a => `
+    <tr>
+      <td>${a.cover_image_url ? `<img class="ga-thumb" src="${a.cover_image_url}" alt="">` : ''}</td>
+      <td>${esc(a.title)}</td>
+      <td>${esc(a.category)}</td>
+      <td>${a.album_date || ''}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-delete="${a.id}">삭제</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removeAlbum(btn.dataset.delete)));
+}
+
+async function removeAlbum(id) {
+  const album = __gaAlbums.find(a => a.id === id);
+  if (!confirm(`"${album ? album.title : ''}" 앨범과 그 안의 사진을 전부 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  try {
+    await deleteGalleryAlbum(id);
+    await loadAlbumList();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('form-album').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('ga-error');
+  errorEl.hidden = true;
+  const category = document.getElementById('ga-category').value;
+  const title = document.getElementById('ga-title').value.trim();
+  const albumDate = document.getElementById('ga-date').value || null;
+  const files = Array.from(document.getElementById('ga-images').files);
+  const submitBtn = document.getElementById('ga-submit-btn');
+  if (!title || files.length === 0) return;
+
+  submitBtn.disabled = true;
+  try {
+    const sb = requireSupabaseClient();
+    const album = await createGalleryAlbum({ category, title, album_date: albumDate });
+
+    for (let i = 0; i < files.length; i++) {
+      submitBtn.textContent = `업로드 중… (${i + 1}/${files.length})`;
+      const file = files[i];
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${album.id}/${Date.now()}-${i}.${ext}`;
+      const { error: uploadError } = await sb.storage.from(GALLERY_BUCKET).upload(path, file, { upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: pub } = sb.storage.from(GALLERY_BUCKET).getPublicUrl(path);
+      await addGalleryPhoto({ album_id: album.id, image_url: pub.publicUrl, image_path: path, sort_order: i });
+      if (i === 0) {
+        await updateGalleryAlbum(album.id, { cover_image_url: pub.publicUrl });
+      }
+    }
+
+    document.getElementById('form-album').reset();
+    await loadAlbumList();
+  } catch (err) {
+    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '앨범 등록';
+  }
+});
+
+async function initAdminGalleryPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_admin) {
+    document.getElementById('adminGuard').hidden = false;
+    return;
+  }
+  document.getElementById('adminContent').hidden = false;
+  try {
+    await loadAlbumList();
+  } catch (err) {
+    console.error(err);
+    const errEl = document.getElementById('ga-error');
+    errEl.textContent = '목록을 불러오지 못했습니다: ' + err.message + ' (Supabase에 supabase/gallery_schema.sql을 실행하셨는지 확인해주세요)';
+    errEl.hidden = false;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminGalleryPage, 400));
+</script>
+</body>
+</html>

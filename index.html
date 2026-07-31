@@ -193,10 +193,12 @@
 
 <section class="gallery" id="gallery">
   <div class="container">
-    <p class="eyebrow">ACTIVE BEAUTIFUL MOMENTS</p>
-    <h2 class="section-title">빛나는교회 갤러리</h2>
-    <p class="gallery-desc">카테고리를 클릭하면 그 안에 있는 사진 폴더를 최신순으로 볼 수 있어요.</p>
-    <div class="gallery-cat-grid" id="gallery-cat-grid"></div>
+    <div class="showcase-head">
+      <h2 class="section-title">빛나는교회 갤러리</h2>
+      <a href="/pages/news-gallery.html" class="showcase-more">자세히 보기 →</a>
+    </div>
+    <div class="gallery-album-grid" id="gallery-album-preview"></div>
+    <p class="gallery-empty" id="gallery-preview-empty" hidden>아직 등록된 사진이 없습니다.</p>
   </div>
 </section>
 
@@ -270,6 +272,7 @@
 <script src="/member-auth.js"></script>
 <script src="/sermons-data.js"></script>
 <script src="/weekly-content-data.js"></script>
+<script src="/gallery-data.js"></script>
 <script src="/common.js"></script>
 <script src="script.js"></script>
 <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=a271f7134507da868b7419c80ba23ec8&libraries=services"></script>

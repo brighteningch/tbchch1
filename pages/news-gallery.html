@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>갤러리(교회활동) · 빛나는교회</title>
+<title>포토갤러리 · 빛나는교회</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="/style.css">
@@ -13,13 +13,25 @@
 
 <section class="page-hero">
   <span class="page-badge">CHURCH NEWS</span>
-  <h1>갤러리(교회활동)</h1>
-  <p>빛나는교회 활동 사진·자료입니다.</p>
+  <h1>포토갤러리</h1>
+  <p>빛나는교회 활동 사진입니다.</p>
   <div class="bar"></div>
 </section>
 
-<div class="page-body" style="max-width:900px;">
-  <div class="gallery-cat-grid" id="gallery-cat-grid-page"></div>
+<div class="page-body" style="max-width:1100px;">
+  <div class="community-board-header" style="margin-top:0;">
+    <div class="gallery-tabs" id="gallery-tabs">
+      <button type="button" class="gallery-tab is-active" data-category="전체">전체</button>
+      <button type="button" class="gallery-tab" data-category="예배">예배</button>
+      <button type="button" class="gallery-tab" data-category="다음세대">다음세대</button>
+      <button type="button" class="gallery-tab" data-category="행사">행사</button>
+    </div>
+    <a href="/pages/admin-gallery.html" class="btn btn-primary btn-sm" id="galleryWriteBtn" hidden>사진 올리기</a>
+  </div>
+
+  <div class="gallery-album-grid" id="gallery-album-grid"></div>
+  <p class="gallery-empty" id="gallery-empty" hidden>아직 등록된 사진이 없습니다.</p>
+  <div id="gallery-pagination"></div>
 </div>
 
 <div class="photo-lightbox" id="photoLightbox" hidden>
@@ -39,42 +51,98 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
+<script src="/gallery-data.js"></script>
 <script src="/common.js"></script>
 <script>
-function formatDate(iso) { return iso ? iso.slice(0, 10) : ''; }
-fetch('/.netlify/functions/drive-photos')
-  .then(res => res.json())
-  .then(data => {
-    const catGridEl = document.getElementById('gallery-cat-grid-page');
-    const categories = data.categories || [];
-    if (data.error || categories.length === 0) {
-      catGridEl.innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
-      return;
-    }
+function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const GALLERY_PER_PAGE = 9;
+let __galleryAlbums = [];
+let __galleryCategory = '전체';
 
-    catGridEl.innerHTML = categories.map((cat, i) => `
-      <button type="button" class="gallery-cat-card" data-cat-index="${i}">
-        <div class="gallery-cat-thumb">
-          ${cat.thumb
-            ? `<img src="${cat.thumb}" alt="${cat.name}" loading="lazy">`
-            : `<div class="gallery-cat-thumb-empty">사진 없음</div>`}
-          <span class="gallery-cat-count">${cat.count}개</span>
-        </div>
-        <div>
-          <p class="gallery-cat-label">카테고리</p>
-          <p class="gallery-cat-name">${cat.name}</p>
-          <p class="gallery-cat-date">${cat.date ? formatDate(cat.date) + ' 업데이트' : '최근 업데이트 없음'}</p>
-        </div>
-      </button>`).join('');
+function renderAlbumPage(page) {
+  const grid = document.getElementById('gallery-album-grid');
+  const empty = document.getElementById('gallery-empty');
+  const paginationEl = document.getElementById('gallery-pagination');
 
-    catGridEl.querySelectorAll('[data-cat-index]').forEach(btn => {
-      const cat = categories[Number(btn.dataset.catIndex)];
-      btn.addEventListener('click', () => openCategoryLightbox(cat.id, cat.name));
-    });
-  })
-  .catch(() => {
-    document.getElementById('gallery-cat-grid-page').innerHTML = '<p class="gallery-empty">아직 사진이 없거나 불러오지 못했습니다.</p>';
+  if (__galleryAlbums.length === 0) {
+    grid.innerHTML = '';
+    empty.hidden = false;
+    paginationEl.innerHTML = '';
+    return;
+  }
+  empty.hidden = true;
+
+  const start = (page - 1) * GALLERY_PER_PAGE;
+  const pageItems = __galleryAlbums.slice(start, start + GALLERY_PER_PAGE);
+  grid.innerHTML = pageItems.map(a => `
+    <button type="button" class="gallery-album-card" data-album-id="${a.id}">
+      <div class="gallery-album-thumb">
+        ${a.cover_image_url
+          ? `<img src="${a.cover_image_url}" alt="${escHtml(a.title)}" loading="lazy">`
+          : `<div class="gallery-cat-thumb-empty">사진 없음</div>`}
+      </div>
+      <p class="gallery-album-title">${escHtml(a.title)}</p>
+    </button>`).join('');
+
+  grid.querySelectorAll('[data-album-id]').forEach(btn => {
+    btn.addEventListener('click', () => openAlbumLightbox(btn.dataset.albumId, btn.querySelector('.gallery-album-title').textContent));
   });
+
+  renderPagination(paginationEl, __galleryAlbums.length, GALLERY_PER_PAGE, page, renderAlbumPage);
+}
+
+async function loadAlbums() {
+  const grid = document.getElementById('gallery-album-grid');
+  grid.innerHTML = '<p class="gallery-empty">불러오는 중...</p>';
+  try {
+    __galleryAlbums = await fetchGalleryAlbums(__galleryCategory);
+    renderAlbumPage(1);
+  } catch (err) {
+    console.error('갤러리 로드 실패:', err);
+    grid.innerHTML = '';
+    document.getElementById('gallery-empty').hidden = false;
+  }
+}
+
+async function openAlbumLightbox(albumId, title) {
+  const box = document.getElementById('photoLightbox');
+  document.getElementById('lightboxTitle').textContent = title || '';
+  document.getElementById('lightboxSub').textContent = '불러오는 중...';
+  const grid = document.getElementById('lightboxGrid');
+  grid.className = 'lightbox-grid lightbox-grid--stack';
+  grid.innerHTML = '<p class="lightbox-loading">사진을 불러오는 중입니다...</p>';
+  box.hidden = false;
+
+  try {
+    const photos = await fetchGalleryPhotos(albumId);
+    document.getElementById('lightboxSub').textContent = `사진 ${photos.length}장`;
+    grid.innerHTML = photos.length
+      ? photos.map(p => `<img src="${p.image_url}" alt="${escHtml(title)}" loading="lazy">`).join('')
+      : '<p class="lightbox-loading">등록된 사진이 없습니다.</p>';
+  } catch (err) {
+    grid.innerHTML = '<p class="lightbox-loading">사진을 불러오지 못했습니다.</p>';
+  }
+}
+
+document.getElementById('gallery-tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.gallery-tab');
+  if (!btn || btn.classList.contains('is-active')) return;
+  document.querySelectorAll('.gallery-tab').forEach(b => b.classList.remove('is-active'));
+  btn.classList.add('is-active');
+  __galleryCategory = btn.dataset.category;
+  loadAlbums();
+});
+
+(async function () {
+  initPhotoLightbox();
+  try {
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) {
+      document.getElementById('galleryWriteBtn').hidden = false;
+    }
+  } catch (err) { /* 로그인 안 한 방문자는 무시 */ }
+  await loadAlbums();
+})();
 </script>
 </body>
 </html>
