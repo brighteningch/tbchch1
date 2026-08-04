@@ -23,7 +23,7 @@
 <section class="page-hero">
   <span class="page-badge">ADMIN</span>
   <h1>주간말씀 관리</h1>
-  <p>설교 인포그래픽 · 매일성경묵상 · 소그룹자료를 날짜별 이미지로 등록합니다.</p>
+  <p>설교 인포그래픽 · 매일성경묵상 · 새벽기도 묵상을 등록합니다.</p>
   <div class="bar"></div>
 </section>
 
@@ -37,8 +37,9 @@
     <div class="admin-tabs">
       <button type="button" class="admin-tab active" data-tab="infographic">🎨 설교 인포그래픽</button>
       <button type="button" class="admin-tab" data-tab="daily">🙏 매일성경묵상</button>
-      <button type="button" class="admin-tab" data-tab="share">📚 소그룹자료</button>
+      <button type="button" class="admin-tab" data-tab="dawn-prayer">🌅 새벽기도 묵상</button>
     </div>
+    <p class="field-hint" style="margin-bottom:24px;">소그룹자료(가정예배 순서지)는 <a href="/pages/community-home.html">가정 및 가정교회</a> 메뉴에서 등록합니다.</p>
 
     <!-- 설교 인포그래픽 -->
     <div class="admin-tab-panel active" id="panel-infographic">
@@ -100,34 +101,31 @@
       <p class="sermon-empty" id="dl-empty" hidden>등록된 이미지가 없습니다.</p>
     </div>
 
-    <!-- 소그룹자료 -->
-    <div class="admin-tab-panel" id="panel-share">
-      <form id="form-sh" class="sermon-form">
-        <div class="sermon-form-row">
-          <label>날짜
-            <input type="date" id="sh-date" required>
-          </label>
-          <label>이미지 파일
-            <input type="file" id="sh-image" accept="image/*" required>
-          </label>
-        </div>
-        <p class="field-hint">소그룹(가정교회) 나눔 자료 이미지 한 장을 날짜로 등록합니다.</p>
+    <!-- 새벽기도 묵상 -->
+    <div class="admin-tab-panel" id="panel-dawn-prayer">
+      <form id="form-dp" class="sermon-form">
+        <label>날짜
+          <input type="date" id="dp-date" required>
+        </label>
+        <label>묵상 글
+          <textarea id="dp-body" rows="10" placeholder="오늘의 새벽기도 묵상 글을 적어주세요."></textarea>
+        </label>
         <div class="sermon-form-actions">
-          <button type="submit" class="btn btn-primary" id="sh-submit-btn">등록하기</button>
+          <button type="submit" class="btn btn-primary" id="dp-submit-btn">등록하기</button>
         </div>
-        <p class="auth-error" id="sh-error" hidden></p>
+        <p class="auth-error" id="dp-error" hidden></p>
       </form>
 
       <div class="admin-toolbar" style="margin-top:36px;">
-        <p style="font-weight:700;">등록된 소그룹자료</p>
+        <p style="font-weight:700;">등록된 새벽기도 묵상</p>
       </div>
       <div class="sermon-table-wrap">
         <table class="sermon-table">
-          <thead><tr><th>미리보기</th><th>날짜</th><th>관리</th></tr></thead>
-          <tbody id="sh-tbody"></tbody>
+          <thead><tr><th>날짜</th><th>내용</th><th>관리</th></tr></thead>
+          <tbody id="dp-tbody"></tbody>
         </table>
       </div>
-      <p class="sermon-empty" id="sh-empty" hidden>등록된 이미지가 없습니다.</p>
+      <p class="sermon-empty" id="dp-empty" hidden>등록된 글이 없습니다.</p>
     </div>
   </div>
 </div>
@@ -265,11 +263,63 @@ function attachWeeklyUploadForm(category, prefix, folder, loadList) {
 
 const loadInfographicList = setupContentList('infographic', 'ig');
 const loadDailyList = setupContentList('daily', 'dl');
-const loadShareList = setupContentList('share', 'sh');
-
 attachSingleUploadForm('infographic', 'ig', 'infographic', loadInfographicList);
 attachWeeklyUploadForm('daily', 'dl', 'daily', loadDailyList);
-attachSingleUploadForm('share', 'sh', 'share', loadShareList);
+
+// ---------- 새벽기도 묵상 (글 작성, 파일 없음) ----------
+let __dpList = [];
+
+async function loadDawnPrayerList() {
+  __dpList = await fetchWeeklyContent('dawn-prayer');
+  const tbody = document.getElementById('dp-tbody');
+  const empty = document.getElementById('dp-empty');
+  if (__dpList.length === 0) { tbody.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  tbody.innerHTML = __dpList.map(item => {
+    const bodyText = (item.data && item.data.body) || '';
+    const preview = bodyText.length > 40 ? bodyText.slice(0, 40) + '…' : bodyText;
+    return `
+    <tr>
+      <td>${esc(item.period)}</td>
+      <td>${esc(preview)}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-delete="${item.id}">삭제</button></td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removeDawnPrayer(btn.dataset.delete)));
+}
+
+async function removeDawnPrayer(id) {
+  if (!confirm('이 글을 삭제할까요? 되돌릴 수 없습니다.')) return;
+  try {
+    await deleteWeeklyContent(id);
+    await loadDawnPrayerList();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('form-dp').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('dp-error');
+  errorEl.hidden = true;
+  const date = document.getElementById('dp-date').value;
+  const body = document.getElementById('dp-body').value.trim();
+  const submitBtn = document.getElementById('dp-submit-btn');
+  if (!date || !body) return;
+  submitBtn.disabled = true;
+  submitBtn.textContent = '등록 중…';
+  try {
+    await createWeeklyContent({ category: 'dawn-prayer', title: date, period: date, data: { body } });
+    document.getElementById('form-dp').reset();
+    await loadDawnPrayerList();
+  } catch (err) {
+    errorEl.textContent = '저장 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '등록하기';
+  }
+});
 
 // ---------- 초기화 ----------
 async function initAdminWeeklyWordPage() {
@@ -279,7 +329,7 @@ async function initAdminWeeklyWordPage() {
     return;
   }
   document.getElementById('adminContent').hidden = false;
-  await Promise.all([loadInfographicList(), loadDailyList(), loadShareList()]);
+  await Promise.all([loadInfographicList(), loadDailyList(), loadDawnPrayerList()]);
 }
 
 document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminWeeklyWordPage, 400));

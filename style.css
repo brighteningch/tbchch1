@@ -1048,6 +1048,18 @@ section { padding: 88px 0; }
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 .devotion-empty { color: #b9c8db; padding: 60px 0; text-align: center; }
+.devotion-text-body {
+  text-align: left;
+  color: #e7edf5;
+  font-size: 15px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  background: rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
 .devotion-download-btn {
   display: block;
   margin: 14px auto 0;
@@ -1275,6 +1287,7 @@ section { padding: 88px 0; }
 @media (max-width: 820px) {
   .sermon-layout { flex-direction: column; }
   .sermon-sidebar { width: 100%; }
+  .sermon-main { width: 100%; }
   .sermon-sidebar-links { flex-direction: row; flex-wrap: wrap; }
   .sermon-sidebar-links a { border-left: none; border-bottom: 2px solid var(--border-light); border-radius: 0; }
   .sermon-sidebar-links a.active { border-bottom-color: var(--navy); }
@@ -1314,6 +1327,7 @@ section { padding: 88px 0; }
 
 /* ---------- 말씀과 찬양: 관리자 글쓰기 폼 ---------- */
 .sermon-form { display: flex; flex-direction: column; gap: 16px; }
+.sermon-form[hidden] { display: none; }
 .sermon-form label {
   display: flex; flex-direction: column; gap: 6px;
   font-size: 13.5px; font-weight: 600; color: var(--text-dark);

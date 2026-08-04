@@ -42,20 +42,23 @@ fetch('/content/site.json')
   .then(data => {
     applyBindings(document, data);
 
-    // 예배안내: 주일예배→주중예배→교회학교 순서로 표 하나에 병합, 카테고리는 rowspan으로 묶어 표시(한 줄 표)
+    // 예배안내: 주일예배→교회학교→주중예배 순서로 표 하나에 병합, 카테고리는 rowspan으로 묶어 표시(한 줄 표)
     const WORSHIP_GROUPS = [
       { key: '주일예배', cls: 'wg-sunday' },
-      { key: '주중예배', cls: 'wg-week' },
       { key: '교회학교', cls: 'wg-kids' },
+      { key: '주중예배', cls: 'wg-week' },
     ];
     const groups = WORSHIP_GROUPS
       .map(g => ({ ...g, items: data.worship.filter(w => w.category === g.key) }))
       .filter(g => g.items.length > 0);
-    const bodyRows = groups.map(g => g.items.map((w, i) => `
+    const bodyRows = groups.map(g => g.items.map((w, i) => {
+      const timeLabel = (g.key === '주일예배' || g.key === '교회학교') ? `주일 ${w.time}` : w.time;
+      return `
         <tr>
           ${i === 0 ? `<td class="worship-cat ${g.cls}" rowspan="${g.items.length}">${g.key.slice(0, 2)}<br>${g.key.slice(2)}</td>` : ''}
-          <td>${w.name}</td><td>${w.time}</td><td>${w.location || '본당'}</td>
-        </tr>`).join('')).join('');
+          <td>${w.name}</td><td>${timeLabel}</td><td>${w.location || '본당'}</td>
+        </tr>`;
+    }).join('')).join('');
     document.getElementById('worship-groups').innerHTML = `
       <div class="worship-table-wrap">
         <table class="worship-table worship-unified">
@@ -219,18 +222,47 @@ function showProverbsPopup() {
 
 // 주일 말씀 팝업 메뉴 4종(설교 인포그래픽/주간묵상집/매일성경묵상/소그룹자료) 공용:
 // 관리자가 카테고리별로 업로드한 이미지를 날짜별로 보여준다(weekly_content 테이블)
-const CONTENT_CATEGORY_LABELS = { infographic: '설교 인포그래픽', daily: '매일성경묵상', share: '소그룹자료' };
+const CONTENT_CATEGORY_LABELS = { infographic: '설교 인포그래픽', daily: '매일성경묵상', 'family-worship': '가정예배 순서지', 'dawn-prayer': '새벽기도 묵상' };
 let __contentItemsByCategory = {};
 let __currentContentCategory = 'daily';
 
 let __currentDevotionImage = null; // { url, filename } — 다운로드 버튼이 참조
 
+// 로컬(한국시간) 기준 오늘 날짜 문자열. toISOString()은 UTC라서 자정~9시 사이엔 전날로 나오므로 쓰지 않는다.
+function todayLocalDateStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+// 매일성경묵상은 한 주치를 미리 올려두는 경우가 있어서, 아직 오지 않은 날짜의 자료는
+// 목록·조회 어디서도 노출하지 않는다(업로드는 오늘 하더라도 게시는 해당 날짜부터).
+function visibleContentItems(category) {
+  const items = __contentItemsByCategory[category] || [];
+  if (category !== 'daily') return items;
+  const todayStr = todayLocalDateStr();
+  return items.filter(it => (it.period || '') <= todayStr);
+}
+
 function showContentItem(index) {
-  const items = __contentItemsByCategory[__currentContentCategory] || [];
+  const items = visibleContentItems(__currentContentCategory);
   const item = items[index];
   if (!item) return;
   const imageUrl = (item.data && item.data.imageUrl) || '';
-  document.getElementById('devotionImage').src = imageUrl;
+  const bodyText = (item.data && item.data.body) || '';
+  const imageEl = document.getElementById('devotionImage');
+  const textEl = document.getElementById('devotionTextBody');
+  const downloadBtn = document.getElementById('devotionDownloadBtn');
+  if (imageUrl) {
+    imageEl.src = imageUrl;
+    imageEl.hidden = false;
+    textEl.hidden = true;
+    downloadBtn.hidden = false;
+  } else {
+    imageEl.hidden = true;
+    textEl.hidden = false;
+    textEl.textContent = bodyText;
+    downloadBtn.hidden = true;
+  }
   document.getElementById('devotionDate').textContent = item.period || '';
   document.querySelectorAll('#devotionDateList button').forEach((b, i) => b.classList.toggle('is-active', i === index));
   const label = CONTENT_CATEGORY_LABELS[__currentContentCategory] || '이미지';
@@ -262,7 +294,7 @@ async function downloadCurrentDevotionImage() {
 document.getElementById('devotionDownloadBtn').addEventListener('click', downloadCurrentDevotionImage);
 
 function renderContentDateList() {
-  const items = __contentItemsByCategory[__currentContentCategory] || [];
+  const items = visibleContentItems(__currentContentCategory);
   const wrap = document.getElementById('devotionDateList');
   wrap.innerHTML = items.slice(0, 14).map((item, i) =>
     `<button type="button" data-i="${i}">${(item.period || '').slice(5) || (item.title || '')}</button>`).join('');
@@ -282,22 +314,20 @@ async function openContentLightbox(category) {
     console.error(`${CONTENT_CATEGORY_LABELS[category]} 로드 실패:`, err);
     __contentItemsByCategory[category] = __contentItemsByCategory[category] || [];
   }
-  const items = __contentItemsByCategory[category];
+  const items = visibleContentItems(category);
   if (items.length === 0) {
     img.hidden = true;
+    document.getElementById('devotionTextBody').hidden = true;
+    document.getElementById('devotionDownloadBtn').hidden = true;
     empty.hidden = false;
     document.getElementById('devotionDate').textContent = '';
     document.getElementById('devotionDateList').innerHTML = '';
     return;
   }
-  img.hidden = false;
   empty.hidden = true;
   renderContentDateList();
-  // 오늘 날짜에 맞는 항목이 있으면 그걸 먼저 보여주고, 없으면 가장 최근 항목을 보여준다
-  // (매일성경묵상처럼 한 주 분량을 미리 올려두면 목록엔 미래 날짜도 섞여 있을 수 있어서 필요)
-  // 로컬 달력 날짜를 써야 한다 — toISOString()은 UTC라서 한국시간(UTC+9) 자정~9시 사이엔 전날로 나온다.
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  // 오늘 날짜에 맞는 항목이 있으면 그걸 먼저 보여주고, 없으면 가장 최근(과거) 항목을 보여준다
+  const todayStr = todayLocalDateStr();
   const todayIndex = items.findIndex(it => it.period === todayStr);
   showContentItem(todayIndex >= 0 ? todayIndex : 0);
 }

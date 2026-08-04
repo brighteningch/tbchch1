@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>빛나는교회 편집부 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">COMMUNITY & 양육</span>
+  <h1>빛나는교회 편집부</h1>
+  <p>주제별 설교 및 양육 자료를 나눕니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body">
+  <div class="community-board-header" style="margin-top:0;">
+    <div></div>
+    <a href="/pages/admin-editorial.html" class="btn btn-primary btn-sm" id="edWriteBtn" hidden>글쓰기</a>
+  </div>
+  <div class="sermon-table-wrap">
+    <table class="sermon-table">
+      <thead><tr><th>번호</th><th>제목</th><th>날짜</th><th>형식</th></tr></thead>
+      <tbody id="ed-tbody"></tbody>
+    </table>
+  </div>
+  <div id="ed-pagination"></div>
+  <p class="sermon-empty" id="ed-empty" hidden>아직 등록된 자료가 없습니다.</p>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/weekly-content-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const ED_PER_PAGE = 15;
+(async function () {
+  const tbody = document.getElementById('ed-tbody');
+  const paginationEl = document.getElementById('ed-pagination');
+  let items = [];
+
+  function renderRows(page) {
+    const start = (page - 1) * ED_PER_PAGE;
+    const pageItems = items.slice(start, start + ED_PER_PAGE);
+    tbody.innerHTML = pageItems.map((item, i) => {
+      const d = item.data || {};
+      const link = `/pages/community-editorial-view.html?id=${encodeURIComponent(item.id)}`;
+      const num = items.length - (start + i);
+      const formatLabel = d.fileType === 'pdf' ? 'PDF' : (d.fileType === 'image' ? '이미지' : '-');
+      return `
+      <tr>
+        <td>${num}</td>
+        <td class="sermon-title"><a href="${link}">${escHtml(item.title)}</a></td>
+        <td>${escHtml(item.period || '')}</td>
+        <td>${formatLabel}</td>
+      </tr>`;
+    }).join('');
+    renderPagination(paginationEl, items.length, ED_PER_PAGE, page, renderRows);
+  }
+
+  try {
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) {
+      document.getElementById('edWriteBtn').hidden = false;
+    }
+    items = await fetchWeeklyContent('editorial');
+    if (items.length === 0) {
+      document.getElementById('ed-empty').hidden = false;
+      return;
+    }
+    renderRows(1);
+  } catch (err) {
+    document.getElementById('ed-empty').hidden = false;
+  }
+})();
+</script>
+</body>
+</html>

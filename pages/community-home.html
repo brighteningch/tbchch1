@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>가정 및 구역 예배 · 빛나는교회</title>
+<title>가정 및 가정교회 · 빛나는교회</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="/style.css">
@@ -13,8 +13,8 @@
 
 <section class="page-hero">
   <span class="page-badge">COMMUNITY & 양육</span>
-  <h1>가정 및 구역 예배</h1>
-  <p>가정 및 구역 예배 안내입니다.</p>
+  <h1>가정 및 가정교회</h1>
+  <p>가정 및 가정교회 안내입니다.</p>
   <div class="bar"></div>
 </section>
 
@@ -24,6 +24,33 @@
   <p>나. 초대교회 뿐 아니라 거의 모든 교회가 가정교회 형태로 시작했습니다.</p>
   <p>다. 가정을 중심으로 교회를 이루고 교회의 역할 — 예배, 교제, 선교 — 을 감당함으로 역동적인 선교를 감당합니다.</p>
   <p>라. 가정교회들이 서로 연합(Network)을 이루어 건강한 지역교회를 세웁니다.</p>
+
+  <div class="community-board" style="margin-top:32px;">
+    <div class="community-board-header">
+      <div>
+        <h3 style="color:var(--navy);margin-bottom:6px;">가정예배 순서지</h3>
+        <p style="color:var(--text-gray);font-size:14px;">가정예배·가정교회 모임에서 사용하는 순서지 자료입니다.</p>
+      </div>
+    </div>
+
+    <form id="fwUploadForm" class="sermon-form" hidden style="margin-bottom:24px;">
+      <div class="sermon-form-row">
+        <label>날짜
+          <input type="date" id="fw-date" required>
+        </label>
+        <label>이미지 파일
+          <input type="file" id="fw-image" accept="image/*" required>
+        </label>
+      </div>
+      <div class="sermon-form-actions">
+        <button type="submit" class="btn btn-primary" id="fw-submit-btn">등록하기</button>
+      </div>
+      <p class="auth-error" id="fw-error" hidden></p>
+    </form>
+
+    <div class="gallery-album-grid" id="fwGrid"></div>
+    <p class="gallery-empty" id="fwEmpty" hidden>등록된 가정예배 순서지가 없습니다.</p>
+  </div>
 
   <div class="community-board">
     <div class="community-board-header">
@@ -47,12 +74,28 @@
   </div>
 </div>
 
+<div class="photo-lightbox" id="fwLightbox" hidden>
+  <div class="lightbox-header">
+    <div>
+      <p class="lightbox-title" id="fwLightboxTitle"></p>
+    </div>
+    <button class="lightbox-close" id="fwLightboxClose" aria-label="닫기">✕</button>
+  </div>
+  <div class="lightbox-body" style="display:flex;justify-content:center;">
+    <div style="max-width:640px;width:100%;text-align:center;">
+      <img id="fwLightboxImage" style="max-width:100%;max-height:76vh;border-radius:10px;" alt="가정예배 순서지">
+      <button type="button" class="btn btn-ghost btn-sm" id="fwLightboxDeleteBtn" hidden style="margin-top:16px;">삭제</button>
+    </div>
+  </div>
+</div>
+
 <div id="footerHost"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
 <script src="/common.js"></script>
 <script src="/community-data.js"></script>
+<script src="/weekly-content-data.js"></script>
 <script>
 const BOARD = "community-home";
 const COMMUNITY_PER_PAGE = 15;
@@ -89,6 +132,104 @@ async function loadCommunityList() {
 }
 
 document.addEventListener('DOMContentLoaded', () => setTimeout(loadCommunityList, 400));
+
+// ---------- 가정예배 순서지 ----------
+const FW_BUCKET = 'devotion-images';
+const FW_FOLDER = 'family-worship';
+let __fwItems = [];
+
+function fwDateLabel(d) { return (d || '').replace(/-/g, '.'); }
+
+async function loadFamilyWorshipList() {
+  const grid = document.getElementById('fwGrid');
+  const empty = document.getElementById('fwEmpty');
+  __fwItems = await fetchWeeklyContent('family-worship');
+  if (__fwItems.length === 0) {
+    grid.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  grid.innerHTML = __fwItems.map(item => `
+    <button type="button" class="gallery-album-card" data-id="${item.id}">
+      <div class="gallery-album-thumb"><img src="${(item.data && item.data.imageUrl) || ''}" alt="가정예배 순서지" loading="lazy"></div>
+      <p class="gallery-album-title">가정예배 순서지</p>
+      <p class="gallery-album-date">${fwDateLabel(item.period)}</p>
+    </button>`).join('');
+  grid.querySelectorAll('[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => openFwLightbox(btn.dataset.id));
+  });
+}
+
+function openFwLightbox(id) {
+  const item = __fwItems.find(x => x.id === id);
+  if (!item) return;
+  document.getElementById('fwLightboxTitle').textContent = `가정예배 순서지 · ${fwDateLabel(item.period)}`;
+  document.getElementById('fwLightboxImage').src = (item.data && item.data.imageUrl) || '';
+  const delBtn = document.getElementById('fwLightboxDeleteBtn');
+  delBtn.hidden = !window.__isAdminFw;
+  delBtn.onclick = async () => {
+    if (!confirm('이 순서지를 삭제할까요? 되돌릴 수 없습니다.')) return;
+    try {
+      await deleteWeeklyContent(item.id);
+      if (item.data && item.data.imagePath) {
+        const sb = requireSupabaseClient();
+        await sb.storage.from(FW_BUCKET).remove([item.data.imagePath]);
+      }
+      document.getElementById('fwLightbox').hidden = true;
+      await loadFamilyWorshipList();
+    } catch (err) {
+      alert('삭제 중 오류가 발생했습니다: ' + err.message);
+    }
+  };
+  document.getElementById('fwLightbox').hidden = false;
+}
+document.getElementById('fwLightboxClose').addEventListener('click', () => {
+  document.getElementById('fwLightbox').hidden = true;
+});
+
+document.getElementById('fwUploadForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('fw-error');
+  errorEl.hidden = true;
+  const date = document.getElementById('fw-date').value;
+  const file = document.getElementById('fw-image').files[0];
+  const submitBtn = document.getElementById('fw-submit-btn');
+  if (!date || !file) return;
+  submitBtn.disabled = true;
+  submitBtn.textContent = '업로드 중…';
+  try {
+    const sb = requireSupabaseClient();
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${FW_FOLDER}/${date}-${Date.now()}.${ext}`;
+    const { error: uploadError } = await sb.storage.from(FW_BUCKET).upload(path, file, { upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: pub } = sb.storage.from(FW_BUCKET).getPublicUrl(path);
+    await createWeeklyContent({
+      category: 'family-worship', title: date, period: date,
+      data: { imageUrl: pub.publicUrl, imagePath: path },
+    });
+    document.getElementById('fwUploadForm').reset();
+    await loadFamilyWorshipList();
+  } catch (err) {
+    errorEl.textContent = '저장 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '등록하기';
+  }
+});
+
+(async function initFamilyWorship() {
+  try {
+    const profile = await getCurrentProfile();
+    window.__isAdminFw = !!(profile && profile.is_admin);
+    document.getElementById('fwUploadForm').hidden = !window.__isAdminFw;
+  } catch (err) {
+    window.__isAdminFw = false;
+  }
+  await loadFamilyWorshipList();
+})();
 </script>
 </body>
 </html>

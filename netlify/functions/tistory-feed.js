@@ -26,7 +26,7 @@ exports.handler = async function () {
     const xml = await res.text();
     const items = [];
     const itemBlocks = xml.split("<item>").slice(1);
-    for (const block of itemBlocks.slice(0, 8)) {
+    for (const block of itemBlocks.slice(0, 15)) {
       const title = extractTag(block, "title");
       const link = extractTag(block, "link");
       const pubDate = extractTag(block, "pubDate");

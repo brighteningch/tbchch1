@@ -24,6 +24,13 @@
           <span class="verse-modal-menu-desc">주일 말씀 정리</span>
         </span>
       </button>
+      <button type="button" class="verse-modal-menu-item" data-content-category="dawn-prayer">
+        <span class="verse-modal-menu-icon">🌅</span>
+        <span class="verse-modal-menu-copy">
+          <span class="verse-modal-menu-title">새벽기도 묵상</span>
+          <span class="verse-modal-menu-desc">오늘의 말씀 묵상</span>
+        </span>
+      </button>
       <button type="button" class="verse-modal-menu-item" data-content-category="daily">
         <span class="verse-modal-menu-icon">🙏</span>
         <span class="verse-modal-menu-copy">
@@ -31,11 +38,11 @@
           <span class="verse-modal-menu-desc">말씀과 동행하는 삶</span>
         </span>
       </button>
-      <button type="button" class="verse-modal-menu-item" data-content-category="share">
+      <button type="button" class="verse-modal-menu-item" data-content-category="family-worship">
         <span class="verse-modal-menu-icon">🤝</span>
         <span class="verse-modal-menu-copy">
-          <span class="verse-modal-menu-title">소그룹자료</span>
-          <span class="verse-modal-menu-desc">삶을 나누는 시간</span>
+          <span class="verse-modal-menu-title">가정예배 순서지</span>
+          <span class="verse-modal-menu-desc">소그룹·가정예배 나눔 자료</span>
         </span>
       </button>
     </div>
@@ -222,7 +229,8 @@
   <div class="lightbox-body">
     <div class="devotion-image-wrap">
       <img id="devotionImage" alt="">
-      <p class="devotion-empty" id="devotionEmpty" hidden>아직 등록된 이미지가 없습니다.</p>
+      <div class="devotion-text-body" id="devotionTextBody" hidden></div>
+      <p class="devotion-empty" id="devotionEmpty" hidden>아직 등록된 내용이 없습니다.</p>
       <button type="button" class="btn btn-ghost btn-sm devotion-download-btn" id="devotionDownloadBtn">⬇ 이미지 다운로드</button>
     </div>
     <div class="devotion-date-list" id="devotionDateList"></div>
