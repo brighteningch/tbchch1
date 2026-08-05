@@ -19,7 +19,14 @@
 </section>
 
 <div class="page-body">
-  <p class="gallery-empty">준비 중입니다. 곧 성경공부 자료로 찾아뵙겠습니다.</p>
+  <p>빛나는교회는 성경 본문을 깊이 연구하고 삶에 적용하는 성경공부를 지향합니다. 담임목사님은 성경공부 나눔을 <strong>티스토리 블로그</strong>에 꾸준히 나누고 계시며, 아래에서 최근 글을 바로 확인하실 수 있습니다.</p>
+  <h3 style="color:var(--navy);margin:24px 0 14px;">목사님 성경공부 나눔 (최신 글)</h3>
+  <ul class="notice-list" id="tistory-list">
+    <li class="gallery-empty">불러오는 중...</li>
+  </ul>
+  <div style="text-align:center;margin-top:20px;">
+    <a href="https://eshallom.tistory.com/category/%EC%84%B1%EA%B2%BD%EA%B3%B5%EB%B6%80" target="_blank" rel="noopener" class="btn btn-ghost">성경공부 카테고리 전체 보기 ↗</a>
+  </div>
 </div>
 
 <div id="footerHost"></div>
@@ -27,5 +34,25 @@
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
 <script src="/common.js"></script>
+<script>
+fetch('/.netlify/functions/tistory-category')
+  .then(res => res.json())
+  .then(data => {
+    const list = document.getElementById('tistory-list');
+    list.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+      list.innerHTML = '<li class="gallery-empty">글을 불러오지 못했습니다. 위 링크에서 확인해주세요.</li>';
+      return;
+    }
+    data.items.forEach(item => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="notice-date">${item.date || ''}</span><span class="notice-title"><a href="${item.link}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${item.title}</a></span>`;
+      list.appendChild(li);
+    });
+  })
+  .catch(() => {
+    document.getElementById('tistory-list').innerHTML = '<li class="gallery-empty">글을 불러오지 못했습니다. 위 링크에서 확인해주세요.</li>';
+  });
+</script>
 </body>
 </html>

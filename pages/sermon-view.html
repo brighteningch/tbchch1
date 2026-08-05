@@ -118,7 +118,8 @@ const idParam = params.get('id') || '';
         if (!confirm('이 글을 삭제할까요? 되돌릴 수 없습니다.')) return;
         try {
           await deleteSermon(current.id);
-          location.href = `/pages/${category}.html`;
+          const CATEGORY_PAGE_SLUGS = { '3min': 'sermon-summary' };
+          location.href = `/pages/${CATEGORY_PAGE_SLUGS[category] || category}.html`;
         } catch (err) {
           alert('삭제 중 오류가 발생했습니다: ' + err.message);
         }

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공지사항·주보 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .admin-tabs { display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; }
+  .admin-tab { padding:9px 16px; border-radius:8px; border:1.5px solid var(--border-light); background:#fff; color:var(--text-dark); font-size:14px; font-weight:600; cursor:pointer; }
+  .admin-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+  .admin-tab-panel { display:none; }
+  .admin-tab-panel.active { display:block; }
+  .dl-thumb { width:64px; height:64px; object-fit:cover; border-radius:8px; display:block; }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">ADMIN</span>
+  <h1>공지사항·주보 관리</h1>
+  <p>알림 및 공지사항, 주보를 글과 함께(이미지 또는 PDF) 등록합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="adminGuard" class="admin-guard" hidden>
+    <p>관리자만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="adminContent" hidden>
+    <div class="admin-tabs">
+      <button type="button" class="admin-tab active" data-tab="notice">📢 공지사항</button>
+      <button type="button" class="admin-tab" data-tab="bulletin">📄 주보</button>
+    </div>
+
+    <!-- 공지사항 -->
+    <div class="admin-tab-panel active" id="panel-notice">
+      <form id="form-notice" class="sermon-form">
+        <input type="hidden" id="notice-id">
+        <label>제목
+          <input type="text" id="notice-title" required placeholder="예: 8월 여름성경학교 안내">
+        </label>
+        <div class="sermon-form-row">
+          <label>날짜
+            <input type="date" id="notice-date" required>
+          </label>
+          <label>첨부파일 (이미지 또는 PDF, 선택)
+            <input type="file" id="notice-file" accept="image/*,application/pdf">
+          </label>
+        </div>
+        <label>내용
+          <textarea id="notice-body" rows="6" placeholder="공지 내용을 적어주세요."></textarea>
+        </label>
+        <p class="field-hint">수정 시 파일을 다시 선택하지 않으면 기존 파일이 그대로 유지됩니다.</p>
+        <div class="sermon-form-actions">
+          <button type="submit" class="btn btn-primary" id="notice-submit-btn">등록하기</button>
+          <button type="button" class="btn btn-ghost" id="notice-cancel-btn" hidden>수정 취소</button>
+        </div>
+        <p class="auth-error" id="notice-error" hidden></p>
+      </form>
+
+      <div class="admin-toolbar" style="margin-top:36px;">
+        <p style="font-weight:700;">등록된 공지사항</p>
+      </div>
+      <div class="sermon-table-wrap">
+        <table class="sermon-table">
+          <thead><tr><th>제목</th><th>날짜</th><th>첨부</th><th>관리</th></tr></thead>
+          <tbody id="notice-tbody"></tbody>
+        </table>
+      </div>
+      <p class="sermon-empty" id="notice-empty" hidden>등록된 공지사항이 없습니다.</p>
+    </div>
+
+    <!-- 주보 -->
+    <div class="admin-tab-panel" id="panel-bulletin">
+      <form id="form-bulletin" class="sermon-form">
+        <input type="hidden" id="bulletin-id">
+        <label>제목
+          <input type="text" id="bulletin-title" required placeholder="예: 2026년 8월 2주 주보">
+        </label>
+        <div class="sermon-form-row">
+          <label>날짜
+            <input type="date" id="bulletin-date" required>
+          </label>
+          <label>주보 파일 (이미지 또는 PDF)
+            <input type="file" id="bulletin-file" accept="image/*,application/pdf">
+          </label>
+        </div>
+        <label>내용 (선택)
+          <textarea id="bulletin-body" rows="4" placeholder="필요하면 간단한 설명을 적어주세요."></textarea>
+        </label>
+        <p class="field-hint">수정 시 파일을 다시 선택하지 않으면 기존 파일이 그대로 유지됩니다.</p>
+        <div class="sermon-form-actions">
+          <button type="submit" class="btn btn-primary" id="bulletin-submit-btn">등록하기</button>
+          <button type="button" class="btn btn-ghost" id="bulletin-cancel-btn" hidden>수정 취소</button>
+        </div>
+        <p class="auth-error" id="bulletin-error" hidden></p>
+      </form>
+
+      <div class="admin-toolbar" style="margin-top:36px;">
+        <p style="font-weight:700;">등록된 주보</p>
+      </div>
+      <div class="sermon-table-wrap">
+        <table class="sermon-table">
+          <thead><tr><th>제목</th><th>날짜</th><th>첨부</th><th>관리</th></tr></thead>
+          <tbody id="bulletin-tbody"></tbody>
+        </table>
+      </div>
+      <p class="sermon-empty" id="bulletin-empty" hidden>등록된 주보가 없습니다.</p>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/weekly-content-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const NEWS_BUCKET = 'devotion-images';
+
+document.querySelectorAll('.admin-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// 공지사항/주보 둘 다 동일한 형태(제목+날짜+선택적 글+선택적 파일)라 하나의 팩토리로 만든다.
+function setupNewsTab(category, prefix, folder) {
+  let list = [];
+
+  function resetForm() {
+    document.getElementById(prefix + '-id').value = '';
+    document.getElementById('form-' + prefix).reset();
+    document.getElementById(prefix + '-submit-btn').textContent = '등록하기';
+    document.getElementById(prefix + '-cancel-btn').hidden = true;
+  }
+
+  async function loadList() {
+    list = await fetchWeeklyContent(category);
+    const tbody = document.getElementById(prefix + '-tbody');
+    const empty = document.getElementById(prefix + '-empty');
+    if (list.length === 0) { tbody.innerHTML = ''; empty.hidden = false; return; }
+    empty.hidden = true;
+    tbody.innerHTML = list.map(item => {
+      const d = item.data || {};
+      return `
+      <tr>
+        <td>${esc(item.title)}</td>
+        <td>${esc(item.period)}</td>
+        <td>${d.fileType === 'pdf' ? 'PDF' : (d.fileType === 'image' ? '이미지' : '-')}</td>
+        <td>
+          <button type="button" class="btn btn-ghost btn-sm" data-edit="${item.id}">수정</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-delete="${item.id}">삭제</button>
+        </td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => startEdit(btn.dataset.edit)));
+    tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removeItem(btn.dataset.delete)));
+  }
+
+  function startEdit(id) {
+    const item = list.find(x => x.id === id);
+    if (!item) return;
+    document.getElementById(prefix + '-id').value = item.id;
+    document.getElementById(prefix + '-title').value = item.title || '';
+    document.getElementById(prefix + '-date').value = item.period || '';
+    document.getElementById(prefix + '-body').value = (item.data && item.data.body) || '';
+    document.getElementById(prefix + '-submit-btn').textContent = '수정 저장';
+    document.getElementById(prefix + '-cancel-btn').hidden = false;
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector(`.admin-tab[data-tab="${category}"]`).classList.add('active');
+    document.getElementById('panel-' + category).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function removeItem(id) {
+    if (!confirm('삭제할까요? 되돌릴 수 없습니다.')) return;
+    const item = list.find(x => x.id === id);
+    try {
+      await deleteWeeklyContent(id);
+      if (item && item.data && item.data.filePath) {
+        const sb = requireSupabaseClient();
+        await sb.storage.from(NEWS_BUCKET).remove([item.data.filePath]);
+      }
+      await loadList();
+    } catch (err) {
+      alert('삭제 중 오류가 발생했습니다: ' + err.message);
+    }
+  }
+
+  document.getElementById(prefix + '-cancel-btn').addEventListener('click', resetForm);
+  document.getElementById('form-' + prefix).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById(prefix + '-error');
+    errorEl.hidden = true;
+    const id = document.getElementById(prefix + '-id').value;
+    const title = document.getElementById(prefix + '-title').value.trim();
+    const date = document.getElementById(prefix + '-date').value;
+    const body = document.getElementById(prefix + '-body').value.trim();
+    const file = document.getElementById(prefix + '-file').files[0];
+    const submitBtn = document.getElementById(prefix + '-submit-btn');
+    submitBtn.disabled = true;
+    try {
+      const sb = requireSupabaseClient();
+      let fileData = null;
+      if (id) {
+        const existing = list.find(x => x.id === id);
+        fileData = existing ? existing.data : null;
+      }
+      if (file) {
+        submitBtn.textContent = '업로드 중…';
+        const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+        const fileType = file.type === 'application/pdf' || ext === 'pdf' ? 'pdf' : 'image';
+        const path = `${folder}/${date}-${Date.now()}.${ext}`;
+        const { error: uploadError } = await sb.storage.from(NEWS_BUCKET).upload(path, file, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: pub } = sb.storage.from(NEWS_BUCKET).getPublicUrl(path);
+        fileData = { fileUrl: pub.publicUrl, filePath: path, fileType };
+      }
+      submitBtn.textContent = id ? '수정 저장' : '등록하기';
+      const payload = { category, title, period: date, data: { body, ...(fileData || {}) } };
+      if (id) await updateWeeklyContent(id, payload); else await createWeeklyContent(payload);
+      resetForm();
+      await loadList();
+    } catch (err) {
+      errorEl.textContent = '저장 중 오류가 발생했습니다: ' + err.message;
+      errorEl.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = id ? '수정 저장' : '등록하기';
+    }
+  });
+
+  return { loadList, startEdit };
+}
+
+const noticeTab = setupNewsTab('notice', 'notice', 'notice');
+const bulletinTab = setupNewsTab('bulletin', 'bulletin', 'bulletin');
+
+async function initAdminNewsPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_admin) {
+    document.getElementById('adminGuard').hidden = false;
+    return;
+  }
+  document.getElementById('adminContent').hidden = false;
+  await Promise.all([noticeTab.loadList(), bulletinTab.loadList()]);
+
+  const searchParams = new URLSearchParams(location.search);
+  const tabParam = searchParams.get('tab');
+  if (tabParam === 'bulletin') {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('.admin-tab[data-tab="bulletin"]').classList.add('active');
+    document.getElementById('panel-bulletin').classList.add('active');
+  }
+  const editParam = searchParams.get('edit');
+  if (editParam) {
+    if (tabParam === 'bulletin') bulletinTab.startEdit(editParam); else noticeTab.startEdit(editParam);
+  }
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminNewsPage, 400));
+</script>
+</body>
+</html>

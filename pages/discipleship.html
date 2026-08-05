@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교회 양육과정 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+<style>
+  :root { --disc-gold: #e0af2e; --disc-gold-light: #f6d976; }
+  .disc-section { border-radius:20px; padding:40px 36px; margin-bottom:32px; }
+  .disc-section--cream { background:linear-gradient(160deg,#fdf6ea 0%,#fbeedb 100%); }
+  .disc-section-title { font-size:24px; font-weight:800; color:var(--navy); margin-bottom:24px; }
+  .disc-section-title--bar { padding-bottom:14px; border-bottom:2px solid var(--border-light); }
+
+  /* 슬라이드2: 단계별 체계도 */
+  .disc-overview { display:flex; gap:28px; align-items:stretch; }
+  .disc-overview-rows { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; }
+  .disc-overview-photo { flex:0 0 260px; }
+  .disc-overview-photo img { width:100%; height:100%; object-fit:cover; border-radius:16px; box-shadow:0 12px 30px rgba(15,40,70,0.14); }
+  .disc-stage-row { display:flex; align-items:center; gap:16px; background:#fff; border-radius:10px; padding:14px 20px; border-left:5px solid var(--navy); box-shadow:0 6px 16px rgba(15,40,70,0.05); }
+  .disc-stage-row.gold { border-left-color:var(--disc-gold); }
+  .disc-stage-row-label { flex:0 0 88px; font-weight:800; color:var(--navy); font-size:15px; white-space:nowrap; }
+  .disc-stage-row.gold .disc-stage-row-label { color:var(--disc-gold); }
+  .disc-stage-row-name { flex:0 0 120px; font-weight:700; color:var(--text-dark); font-size:14.5px; }
+  .disc-stage-row-chips { display:flex; flex-wrap:wrap; gap:6px; flex:1; }
+  .disc-stage-row-chips span { background:#eaf1fb; color:var(--navy); font-size:12.5px; font-weight:600; padding:5px 12px; border-radius:999px; }
+
+  /* 공용 카드 */
+  .disc-card { background:#fff; border-radius:14px; padding:24px; box-shadow:0 8px 22px rgba(15,40,70,0.06); }
+  .disc-card h4 { color:var(--navy); font-size:17px; margin-bottom:10px; }
+  .disc-card p { color:var(--text-gray); font-size:14px; line-height:1.7; }
+
+  /* 슬라이드3: 1단계 */
+  .disc-row-2col { display:flex; gap:20px; flex-wrap:wrap; }
+  .disc-row-2col > * { flex:1; min-width:280px; }
+  .disc-evangelism-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .disc-evangelism-grid span { background:var(--bg-cool); border-radius:8px; padding:12px; font-size:14px; font-weight:600; color:var(--text-dark); text-align:center; }
+  .disc-cta-bar { margin-top:14px; background:linear-gradient(160deg,var(--disc-gold-light) 0%,var(--disc-gold) 100%); color:var(--navy); font-weight:800; text-align:center; padding:12px; border-radius:8px; }
+  .disc-card--gold-border { border-left:5px solid var(--disc-gold); }
+  .disc-week-list { margin-top:14px; display:flex; flex-direction:column; gap:8px; }
+  .disc-week-list li { list-style:none; border-left:4px solid var(--disc-gold); background:var(--bg-cool); border-radius:0 8px 8px 0; padding:9px 14px; font-size:13.5px; }
+  .disc-week-list li strong { color:var(--navy); margin-right:6px; }
+
+  /* 슬라이드4: 2단계 */
+  .disc-icon-grid-wrap { display:flex; gap:28px; align-items:center; }
+  .disc-icon-grid { flex:1; min-width:0; display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; }
+  .disc-icon-card { text-align:center; background:#fff; border:1px solid var(--border-light); border-radius:12px; padding:20px 14px; box-shadow:0 6px 16px rgba(15,40,70,0.05); }
+  .disc-icon-circle { width:52px; height:52px; border-radius:50%; background:var(--navy); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; margin:0 auto 12px; }
+  .disc-icon-card h4 { font-size:15px; color:var(--text-dark); margin-bottom:6px; }
+  .disc-icon-card p { font-size:12.5px; color:var(--text-gray); line-height:1.5; }
+  .disc-icon-grid-photo { flex:0 0 220px; }
+  .disc-icon-grid-photo img { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:14px; box-shadow:0 12px 30px rgba(15,40,70,0.14); }
+
+  /* 슬라이드5: 3·4단계 */
+  .disc-vision-wrap { display:flex; gap:28px; align-items:center; }
+  .disc-vision-photo { flex:0 0 260px; }
+  .disc-vision-photo img { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:14px; box-shadow:0 12px 30px rgba(15,40,70,0.14); }
+  .disc-vision-cards { flex:1; min-width:0; display:flex; flex-direction:column; gap:16px; }
+  .disc-vision-card { position:relative; background:#fff; border-left:5px solid var(--navy); border-radius:10px; padding:20px 22px; box-shadow:0 8px 22px rgba(15,40,70,0.06); }
+  .disc-vision-card.gold { border-left-color:var(--disc-gold); }
+  .disc-vision-badge { position:absolute; top:16px; right:18px; background:var(--navy); color:#fff; font-size:12px; font-weight:700; padding:4px 12px; border-radius:999px; }
+  .disc-vision-card.gold .disc-vision-badge { background:var(--disc-gold); color:var(--navy); }
+  .disc-vision-card h4 { color:var(--navy); margin-bottom:8px; padding-right:70px; }
+  .disc-vision-card p { color:var(--text-gray); font-size:14px; line-height:1.7; }
+
+  /* 슬라이드6: 5단계 */
+  .disc-final { background:linear-gradient(160deg, var(--navy) 0%, var(--navy-dark) 100%); border-radius:20px; overflow:hidden; display:flex; align-items:stretch; margin-bottom:32px; }
+  .disc-final-text { flex:1; min-width:0; padding:44px 40px; color:#fff; }
+  .disc-final-badge { color:var(--disc-gold-light); font-weight:800; font-size:13px; letter-spacing:1px; margin-bottom:10px; }
+  .disc-final-text h3 { font-size:26px; margin-bottom:16px; }
+  .disc-final-text > p { color:#cfd9ec; font-size:14.5px; line-height:1.8; margin-bottom:20px; }
+  .disc-final-list { display:flex; flex-direction:column; gap:12px; }
+  .disc-final-list li { list-style:none; display:flex; gap:10px; align-items:flex-start; font-size:14px; color:#e7ecf5; }
+  .disc-final-list li::before { content:'✓'; flex:0 0 22px; height:22px; border-radius:50%; background:var(--disc-gold); color:var(--navy); font-weight:800; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .disc-final-list li strong { color:#fff; margin-right:4px; }
+  .disc-final-photo { flex:0 0 40%; }
+  .disc-final-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+
+  @media (max-width: 760px) {
+    .disc-overview, .disc-icon-grid-wrap, .disc-vision-wrap { flex-direction:column; }
+    .disc-overview-photo, .disc-icon-grid-photo, .disc-vision-photo { flex:none; width:100%; }
+    .disc-icon-grid-photo img, .disc-vision-photo img { aspect-ratio:16/9; }
+    .disc-icon-grid { grid-template-columns:repeat(2, 1fr); }
+    .disc-final { flex-direction:column; }
+    .disc-final-photo { flex:none; height:220px; }
+    .disc-section { padding:28px 20px; }
+    .disc-stage-row { flex-wrap:wrap; }
+    .disc-stage-row-label, .disc-stage-row-name { flex:none; }
+    .disc-stage-row-chips { flex:0 0 100%; }
+  }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge" style="background:rgba(224,175,46,0.18); border-color:rgba(224,175,46,0.5); color:var(--disc-gold-light, #f6d976);">✝ DISCIPLESHIP CURRICULUM</span>
+  <h1>교회 양육과정 로드맵</h1>
+  <p>하나님 나라의 성숙한 제자로 바로 서기 위한 체계적인 단계별 양육 시스템입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:980px;">
+  <img class="press-modal-thumb" src="/content/discipleship/tee-community.png" alt="소그룹 TEE 공동체학습 - TEE 공동체학습으로 이루는 네 가지 변화" style="margin-bottom:32px;">
+
+  <!-- 슬라이드2: 양육 과정 단계별 체계도 -->
+  <div class="disc-section disc-section--cream">
+    <p class="disc-section-title">양육 과정 단계별 체계도</p>
+    <div class="disc-overview">
+      <div class="disc-overview-rows">
+        <div class="disc-stage-row gold">
+          <span class="disc-stage-row-label">👑 5단계</span>
+          <span class="disc-stage-row-name">리더십 완성</span>
+          <span class="disc-stage-row-chips"><span>크리스챤 리더십 코칭</span></span>
+        </div>
+        <div class="disc-stage-row">
+          <span class="disc-stage-row-label">✝ 4단계</span>
+          <span class="disc-stage-row-name">제자 훈련</span>
+          <span class="disc-stage-row-chips"><span>예수 그리스도의 생애(세퍼드 라이프)</span></span>
+        </div>
+        <div class="disc-stage-row">
+          <span class="disc-stage-row-label">🧭 3단계</span>
+          <span class="disc-stage-row-name">비전 확립</span>
+          <span class="disc-stage-row-chips"><span>VISION 코칭</span></span>
+        </div>
+        <div class="disc-stage-row">
+          <span class="disc-stage-row-label">📖 2단계</span>
+          <span class="disc-stage-row-name">성장과 삶 양육</span>
+          <span class="disc-stage-row-chips"><span>신앙의 토대</span><span>잠언</span><span>기도</span><span>가정생활</span><span>전도하는 삶</span></span>
+        </div>
+        <div class="disc-stage-row">
+          <span class="disc-stage-row-label">🌱 1단계</span>
+          <span class="disc-stage-row-name">전도 &amp; 새가족</span>
+          <span class="disc-stage-row-chips"><span>함께하는 전도</span><span>새가족 양육 (5주)</span></span>
+        </div>
+      </div>
+      <div class="disc-overview-photo">
+        <img src="/content/discipleship/tree-growth.jpg" alt="작은 새싹처럼 자라나는 제자의 삶">
+      </div>
+    </div>
+  </div>
+
+  <!-- 슬라이드3: 1단계 -->
+  <div>
+    <p class="disc-section-title disc-section-title--bar">1단계: 전도 및 새가족 양육</p>
+    <div class="disc-row-2col">
+      <div class="disc-card">
+        <h4>👥 함께하는 전도</h4>
+        <p>공동체가 하나 되어 일상과 현장에서 복음을 전하는 5가지 실천 영역입니다.</p>
+        <div class="disc-evangelism-grid">
+          <span>👤 개인전도</span><span>🤝 노방전도</span><span>👪 공동체전도</span><span>📣 문화전도</span>
+        </div>
+        <div class="disc-cta-bar">🎪 전도축제 (이웃초청축제)</div>
+      </div>
+      <div class="disc-card disc-card--gold-border">
+        <h4>🌿 새가족 양육 (5주)</h4>
+        <p>교회에 첫발을 디딘 성도님이 믿음의 뿌리를 내리도록 돕는 기초 과정입니다.</p>
+        <ul class="disc-week-list">
+          <li><strong>1주차:</strong>구원의 확신</li>
+          <li><strong>2주차:</strong>말씀으로 풍성한 삶</li>
+          <li><strong>3주차:</strong>기도로 풍성한 삶</li>
+          <li><strong>4주차:</strong>교회와 삶</li>
+          <li><strong>5주차:</strong>나는 누구인가? (행동유형, 영적은사 검사)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 슬라이드4: 2단계 -->
+  <div style="margin-top:40px;">
+    <p class="disc-section-title disc-section-title--bar">2단계: 신앙 성장 &amp; 삶의 양육</p>
+    <div class="disc-icon-grid-wrap">
+      <div class="disc-icon-grid">
+        <div class="disc-icon-card"><div class="disc-icon-circle">🛐</div><h4>신앙의 토대</h4><p>구원의 확신과 복음의 기본 진리를 바르게 정립하는 과정</p></div>
+        <div class="disc-icon-card"><div class="disc-icon-circle">📜</div><h4>잠언</h4><p>하나님을 경외하며 삶의 지혜를 배우는 성경적 원리</p></div>
+        <div class="disc-icon-card"><div class="disc-icon-circle">🙏</div><h4>기도</h4><p>하나님과 깊은 친밀감을 누리는 기도 대화법과 실천</p></div>
+        <div class="disc-icon-card"><div class="disc-icon-circle">📣</div><h4>전도하는 삶</h4><p>삶의 현장에서 복음의 향기를 발하는 증인의 삶</p></div>
+        <div class="disc-icon-card"><div class="disc-icon-circle">🏠</div><h4>가정생활</h4><p>성경적 가치관으로 건강하고 행복한 가정을 세우는 훈련</p></div>
+      </div>
+      <div class="disc-icon-grid-photo">
+        <img src="/content/discipleship/photo-dinner.jpg" alt="교제를 나누는 성도들">
+      </div>
+    </div>
+  </div>
+
+  <!-- 슬라이드5: 3·4단계 -->
+  <div style="margin-top:40px;">
+    <p class="disc-section-title disc-section-title--bar">3·4단계: 비전 및 그리스도 중심 제자화</p>
+    <div class="disc-vision-wrap">
+      <div class="disc-vision-photo">
+        <img src="/content/discipleship/photo-mission.jpg" alt="선교지에서 함께한 청년들">
+      </div>
+      <div class="disc-vision-cards">
+        <div class="disc-vision-card">
+          <span class="disc-vision-badge">3단계</span>
+          <h4>VISION 코칭</h4>
+          <p>교회의 사명과 비전을 공유하고, 각 사람에게 주신 영적 은사 및 삶의 목적을 발견하여 사명자로 결단하는 과정입니다.</p>
+        </div>
+        <div class="disc-vision-card gold">
+          <span class="disc-vision-badge">4단계</span>
+          <h4>예수 그리스도의 생애 (세퍼드 라이프)</h4>
+          <p>복음서에 나타난 예수님의 성품, 사역, 가르침을 깊이 있게 묵상하여 성숙한 그리스도인으로 성장하는 핵심 제자 과정입니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 슬라이드6: 5단계 (FINAL STAGE) -->
+  <div style="margin-top:40px;">
+    <div class="disc-final">
+      <div class="disc-final-text">
+        <p class="disc-final-badge">FINAL STAGE</p>
+        <h3>5단계: 크리스챤 리더십 코칭</h3>
+        <p>하나님 나라의 충성된 사역자로서 소그룹을 이끌고 섬기는 제자 리더를 양성하는 최고급 리더십 과정입니다.</p>
+        <ul class="disc-final-list">
+          <li><strong>섬김의 리더십:</strong> 예수님의 겸손과 종의 자세를 배우는 사역 원리</li>
+          <li><strong>소그룹 인도법:</strong> 셀/다락방 모임 촉진 및 영적 돌봄 가이드</li>
+          <li><strong>사역자 훈련:</strong> 영적 지도력 배양</li>
+        </ul>
+      </div>
+      <div class="disc-final-photo">
+        <img src="/content/discipleship/photo-prayer.jpg" alt="리더를 세우며 함께 기도하는 성도들">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/common.js"></script>
+</body>
+</html>

@@ -19,6 +19,10 @@
 </section>
 
 <div class="page-body">
+  <div class="community-board-header" style="margin-top:0;">
+    <div></div>
+    <a href="/pages/admin-news.html?tab=bulletin" class="btn btn-primary btn-sm" id="bulletinWriteBtn" hidden>글쓰기</a>
+  </div>
   <ul class="notice-list" id="bulletin-list-page"></ul>
 </div>
 
@@ -26,21 +30,32 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
+<script src="/weekly-content-data.js"></script>
 <script src="/common.js"></script>
 <script>
-document.addEventListener('bulletinsdata:loaded', (e) => {
-  const list = document.getElementById('bulletin-list-page');
-  if (!e.detail || e.detail.length === 0) {
-    list.innerHTML = '<li class="gallery-empty">아직 등록된 주보가 없습니다.</li>';
-    return;
+function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+(async function () {
+  try {
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) document.getElementById('bulletinWriteBtn').hidden = false;
+  } catch (err) { /* 비로그인 상태면 무시 */ }
+
+  try {
+    const items = await fetchWeeklyContent('bulletin');
+    const list = document.getElementById('bulletin-list-page');
+    if (items.length === 0) {
+      list.innerHTML = '<li class="gallery-empty">아직 등록된 주보가 없습니다.</li>';
+      return;
+    }
+    list.innerHTML = items.map(b => {
+      const link = `/pages/news-bulletin-view.html?id=${encodeURIComponent(b.id)}`;
+      return `<li><span class="notice-date">${escHtml(b.period)}</span><span class="notice-title"><a href="${link}" style="color:inherit;text-decoration:none;">📄 ${escHtml(b.title)}</a></span></li>`;
+    }).join('');
+  } catch (err) {
+    document.getElementById('bulletin-list-page').innerHTML = '<li class="gallery-empty">주보를 불러오지 못했습니다.</li>';
   }
-  list.innerHTML = '';
-  e.detail.slice().sort((a,b) => (a.date < b.date ? 1 : -1)).forEach(b => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="notice-date">${b.date}</span><span class="notice-title"><a href="${b.file}" target="_blank" rel="noopener" style="color:inherit;">📄 ${b.title}</a></span>`;
-    list.appendChild(li);
-  });
-});
+})();
 </script>
 </body>
 </html>

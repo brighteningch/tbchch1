@@ -63,6 +63,27 @@
   </div>
 </div>
 
+<div class="verse-modal" id="shortsModal" hidden>
+  <div class="verse-modal-backdrop" id="shortsModalBackdrop"></div>
+  <div class="verse-modal-box verse-modal-box--shorts">
+    <button class="verse-modal-close" id="shortsModalClose" aria-label="닫기">✕</button>
+    <p class="verse-modal-title">이번 주 소식</p>
+    <div class="shorts-modal-video" id="shortsModalVideoWrap" hidden>
+      <iframe id="shortsModalFrame" src="" title="이번 주 소식" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+    </div>
+    <img class="press-modal-thumb" id="shortsModalImage" src="" alt="이번 주 소식" hidden style="margin-top:14px;">
+    <label class="verse-modal-hide" style="margin-top:14px;">
+      <input type="checkbox" id="shortsModalHideToday"> 오늘 하루 열지 않기
+    </label>
+  </div>
+</div>
+
+<!-- 데스크톱 전용: 팝업 3종(이번 주 소식/주일 말씀/잠언 묵상)을 한 화면에 동시에 보여주는 공유 트레이 -->
+<div class="popup-tray" id="popupTray" hidden>
+  <div class="verse-modal-backdrop" id="popupTrayBackdrop"></div>
+  <div class="popup-tray-row" id="popupTrayRow"></div>
+</div>
+
 <!-- 찬양 듣기: 히어로 버튼 클릭 시 우측 하단에 뜨는 플로팅 플레이어 -->
 <div id="praisePlayer" class="praise-player" hidden>
   <div class="praise-player-head">

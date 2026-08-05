@@ -164,61 +164,167 @@ function initPressSlideshow() {
 }
 initPressSlideshow();
 
-// 주일 말씀 팝업 (설교 인포그래픽/주간묵상집/매일성경묵상/소그룹나눔 바로가기)
-function showSundayPopup() {
-  const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  if (localStorage.getItem('verseModalDismissed') === todayStr) {
-    showProverbsPopup();
-    return;
+// 홈페이지 팝업 3종(이번 주 소식/주일 말씀/잠언 묵상): 모바일에서는 하나씩 순서대로,
+// 데스크톱(769px 이상)에서는 3개를 한 화면에 동시에 띄운다. 쇼츠가 항상 가장 먼저(모바일 순서상 1번째,
+// 데스크톱 트레이의 맨 왼쪽) 오도록 배열 순서를 고정한다.
+function extractYoutubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
+  return m ? m[1] : null;
+}
+
+const POPUP_TODAY_STR = new Date().toISOString().slice(0, 10);
+
+// 이번 주 소식(유튜브 쇼츠 또는 광고 이미지): weekly_content(category='shorts')의 최신 항목을 준비한다.
+// 등록된 게 없거나 오늘 하루 닫기 상태면 null을 반환해 팝업 자체를 건너뛴다.
+async function prepareShortsPopup() {
+  if (localStorage.getItem('shortsModalDismissed') === POPUP_TODAY_STR) return false;
+  let items = [];
+  try { items = await fetchWeeklyContent('shorts'); } catch (err) { return false; }
+  const latest = items[0] && items[0].data;
+  if (!latest) return false;
+
+  const videoWrap = document.getElementById('shortsModalVideoWrap');
+  const frame = document.getElementById('shortsModalFrame');
+  const imageEl = document.getElementById('shortsModalImage');
+
+  if (latest.type === 'image' && latest.imageUrl) {
+    imageEl.src = latest.imageUrl;
+    imageEl.hidden = false;
+    videoWrap.hidden = true;
+    return true;
   }
+  const videoId = extractYoutubeId(latest.videoUrl);
+  if (videoId) {
+    // 다른 팝업과 동시에 노출되므로 자동재생시킨다(브라우저 정책상 자동재생은 음소거 필수).
+    frame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+    videoWrap.hidden = false;
+    imageEl.hidden = true;
+    return true;
+  }
+  return false;
+}
 
-  const modal = document.getElementById('verseModal');
-  modal.hidden = false;
+function prepareSundayPopup() {
+  return localStorage.getItem('verseModalDismissed') !== POPUP_TODAY_STR;
+}
 
-  const close = () => {
-    if (document.getElementById('verseModalHideToday').checked) {
-      localStorage.setItem('verseModalDismissed', todayStr);
-    }
-    modal.hidden = true;
-    showProverbsPopup();
-  };
+function prepareProverbsPopup() {
+  return localStorage.getItem('proverbsModalDismissed') !== POPUP_TODAY_STR;
+}
 
-  document.getElementById('verseModalClose').addEventListener('click', close);
-  document.getElementById('verseModalBackdrop').addEventListener('click', close);
-  document.addEventListener('keydown', function escClose(e) {
-    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
-  });
+const POPUP_DEFS = [
+  {
+    id: 'shortsModal', dismissKey: 'shortsModalDismissed',
+    closeBtn: 'shortsModalClose', backdrop: 'shortsModalBackdrop', hideToday: 'shortsModalHideToday',
+    prepare: prepareShortsPopup,
+    cleanup: () => { document.getElementById('shortsModalFrame').src = ''; document.getElementById('shortsModalImage').src = ''; },
+  },
+  {
+    id: 'verseModal', dismissKey: 'verseModalDismissed',
+    closeBtn: 'verseModalClose', backdrop: 'verseModalBackdrop', hideToday: 'verseModalHideToday',
+    prepare: prepareSundayPopup,
+  },
+  {
+    id: 'proverbsModal', dismissKey: 'proverbsModalDismissed',
+    closeBtn: 'proverbsModalClose', backdrop: 'proverbsModalBackdrop', hideToday: 'proverbsModalHideToday',
+    prepare: prepareProverbsPopup,
+  },
+];
 
-  document.querySelectorAll('#verseModal [data-content-category]').forEach(btn => {
+function wireContentCategoryButtons(box, onOpen) {
+  box.querySelectorAll('[data-content-category]').forEach(btn => {
     btn.addEventListener('click', () => {
-      modal.hidden = true;
+      onOpen();
       openContentLightbox(btn.dataset.contentCategory);
     });
   });
 }
-showSundayPopup();
 
-// 31일 잠언 묵상 새벽기도회 안내 팝업 — 주일 말씀 팝업 바로 뒤에 이어서 뜬다
-function showProverbsPopup() {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  if (localStorage.getItem('proverbsModalDismissed') === todayStr) return;
+// 모바일: 순서대로 하나씩만 띄운다(닫으면 다음 팝업).
+async function runPopupsSequential(index) {
+  if (index >= POPUP_DEFS.length) return;
+  const def = POPUP_DEFS[index];
+  const ok = await def.prepare();
+  if (!ok) { runPopupsSequential(index + 1); return; }
 
-  const modal = document.getElementById('proverbsModal');
+  const modal = document.getElementById(def.id);
   modal.hidden = false;
 
   const close = () => {
-    if (document.getElementById('proverbsModalHideToday').checked) {
-      localStorage.setItem('proverbsModalDismissed', todayStr);
-    }
+    const hideTodayEl = document.getElementById(def.hideToday);
+    if (hideTodayEl && hideTodayEl.checked) localStorage.setItem(def.dismissKey, POPUP_TODAY_STR);
+    if (def.cleanup) def.cleanup();
     modal.hidden = true;
+    runPopupsSequential(index + 1);
   };
 
-  document.getElementById('proverbsModalClose').addEventListener('click', close);
-  document.getElementById('proverbsModalBackdrop').addEventListener('click', close);
+  document.getElementById(def.closeBtn).addEventListener('click', close);
+  document.getElementById(def.backdrop).addEventListener('click', close);
   document.addEventListener('keydown', function escClose(e) {
     if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
   });
+
+  if (def.id === 'verseModal') {
+    wireContentCategoryButtons(modal, () => { modal.hidden = true; });
+  }
 }
+
+// 데스크톱(769px 이상): 준비된 팝업 박스를 전부 공유 트레이 하나로 모아 동시에 띄운다.
+async function runPopupsSimultaneous() {
+  const results = await Promise.all(POPUP_DEFS.map(def => def.prepare()));
+  const activeDefs = POPUP_DEFS.filter((def, i) => results[i]);
+  if (activeDefs.length === 0) return;
+
+  const tray = document.getElementById('popupTray');
+  const row = document.getElementById('popupTrayRow');
+
+  function closeBoxAndMaybeHideTray(def, box) {
+    const hideTodayEl = document.getElementById(def.hideToday);
+    if (hideTodayEl && hideTodayEl.checked) localStorage.setItem(def.dismissKey, POPUP_TODAY_STR);
+    if (def.cleanup) def.cleanup();
+    box.hidden = true;
+    if (![...row.children].some(c => !c.hidden)) tray.hidden = true;
+  }
+
+  activeDefs.forEach(def => {
+    const modal = document.getElementById(def.id);
+    const box = modal.querySelector('.verse-modal-box');
+    row.appendChild(box);
+
+    const close = () => closeBoxAndMaybeHideTray(def, box);
+    document.getElementById(def.closeBtn).addEventListener('click', close);
+
+    if (def.id === 'verseModal') {
+      wireContentCategoryButtons(box, () => close());
+    }
+  });
+
+  function closeAll() {
+    activeDefs.forEach(def => {
+      const hideTodayEl = document.getElementById(def.hideToday);
+      if (hideTodayEl && hideTodayEl.checked) localStorage.setItem(def.dismissKey, POPUP_TODAY_STR);
+      if (def.cleanup) def.cleanup();
+    });
+    row.querySelectorAll('.verse-modal-box').forEach(b => { b.hidden = true; });
+    tray.hidden = true;
+  }
+  document.getElementById('popupTrayBackdrop').addEventListener('click', closeAll);
+  document.addEventListener('keydown', function escClose(e) {
+    if (e.key === 'Escape') { closeAll(); document.removeEventListener('keydown', escClose); }
+  });
+
+  tray.hidden = false;
+}
+
+function initHomepagePopups() {
+  if (window.matchMedia('(min-width: 769px)').matches) {
+    runPopupsSimultaneous();
+  } else {
+    runPopupsSequential(0);
+  }
+}
+initHomepagePopups();
 
 // 주일 말씀 팝업 메뉴 4종(설교 인포그래픽/주간묵상집/매일성경묵상/소그룹자료) 공용:
 // 관리자가 카테고리별로 업로드한 이미지를 날짜별로 보여준다(weekly_content 테이블)
@@ -478,20 +584,19 @@ function togglePraisePlayer(forceOpen) {
   }
 }
 
-fetch('/content/notices.json')
-  .then(res => res.json())
-  .then(data => {
+fetchMergedNotices()
+  .then(items => {
     const list = document.getElementById('notice-list');
     list.innerHTML = '';
-    data.notices
-      .slice()
-      .sort((a, b) => (a.date < b.date ? 1 : -1))
-      .forEach(n => {
-        const li = document.createElement('li');
-        li.style.display = 'block';
-        const body = n.body ? `<p style="margin-top:8px;color:var(--text-gray);font-size:14px;">${n.body.replace(/\n/g, '<br>')}</p>` : '';
-        li.innerHTML = `<div><span class="notice-date">${n.date}</span><span class="notice-title">${n.title}</span></div>${body}`;
-        list.appendChild(li);
-      });
+    items.forEach(n => {
+      const li = document.createElement('li');
+      li.style.display = 'block';
+      const body = n.body ? `<p style="margin-top:8px;color:var(--text-gray);font-size:14px;">${showcaseEsc(n.body).replace(/\n/g, '<br>')}</p>` : '';
+      const titleHtml = n.id
+        ? `<a href="/pages/news-notice-view.html?id=${encodeURIComponent(n.id)}" style="color:inherit;text-decoration:none;">${showcaseEsc(n.title)}</a>`
+        : showcaseEsc(n.title);
+      li.innerHTML = `<div><span class="notice-date">${n.date}</span><span class="notice-title">${titleHtml}</span></div>${body}`;
+      list.appendChild(li);
+    });
   })
-  .catch(err => console.error('notices.json 로드 실패:', err));
+  .catch(err => console.error('공지사항 로드 실패:', err));

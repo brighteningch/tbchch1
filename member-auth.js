@@ -90,7 +90,7 @@ async function renderMemberAuthArea() {
       <div class="member-auth-logged">
         <button class="member-auth-name" id="memberMenuBtn">${profile.name}님 ▾</button>
         <div class="member-auth-dropdown" id="memberMenuDropdown">
-          ${profile.is_admin ? '<a href="/pages/admin-members.html">회원 관리</a><a href="/pages/admin-sermons.html">말씀과 찬양 관리</a><a href="/pages/admin-weekly-word.html">주간말씀 관리</a>' : ''}
+          ${profile.is_admin ? '<a href="/pages/admin-members.html">회원 관리</a><a href="/pages/admin-sermons.html">말씀과 찬양 관리</a><a href="/pages/admin-weekly-word.html">주간말씀 관리</a><a href="/pages/admin-popups.html">홈페이지 팝업 관리</a><a href="/pages/admin-news.html">공지사항·주보 관리</a>' : ''}
           ${profile.is_pastoral_admin ? '<a href="/pages/pastoral-dashboard.html">재적 관리</a>' : ''}
           <button id="memberLogoutBtn">로그아웃</button>
         </div>

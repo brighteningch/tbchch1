@@ -36,3 +36,20 @@ async function deleteWeeklyContent(id) {
   const { error } = await sb.from("weekly_content").delete().eq("id", id);
   if (error) throw error;
 }
+
+// 알림 및 공지사항: 기존 정적 notices.json(초기 안내글 1건)과 관리자가 새로 등록하는
+// weekly_content(category='notice')를 합쳐서 하나의 목록으로 돌려준다.
+async function fetchMergedNotices() {
+  const [staticRes, dbItems] = await Promise.all([
+    fetch('/content/notices.json').then(r => r.json()).catch(() => ({ notices: [] })),
+    fetchWeeklyContent('notice').catch(() => []),
+  ]);
+  const staticItems = (staticRes.notices || []).map(n => ({
+    id: null, date: n.date, title: n.title, body: n.body || '', fileUrl: null, fileType: null,
+  }));
+  const dbNormalized = dbItems.map(item => {
+    const d = item.data || {};
+    return { id: item.id, date: item.period, title: item.title, body: d.body || '', fileUrl: d.fileUrl || null, fileType: d.fileType || null };
+  });
+  return [...staticItems, ...dbNormalized].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}

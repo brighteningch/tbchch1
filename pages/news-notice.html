@@ -19,6 +19,10 @@
 </section>
 
 <div class="page-body">
+  <div class="community-board-header" style="margin-top:0;">
+    <div></div>
+    <a href="/pages/admin-news.html?tab=notice" class="btn btn-primary btn-sm" id="noticeWriteBtn" hidden>글쓰기</a>
+  </div>
   <ul class="notice-list" id="notice-list-page"></ul>
 </div>
 
@@ -26,19 +30,35 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
+<script src="/weekly-content-data.js"></script>
 <script src="/common.js"></script>
 <script>
-document.addEventListener('noticesdata:loaded', (e) => {
-  const list = document.getElementById('notice-list-page');
-  list.innerHTML = '';
-  e.detail.slice().sort((a,b) => (a.date < b.date ? 1 : -1)).forEach(n => {
-    const li = document.createElement('li');
-    li.style.display = 'block';
-    const body = n.body ? `<p style="margin-top:8px;color:var(--text-gray);font-size:14px;">${n.body.replace(/\n/g,'<br>')}</p>` : '';
-    li.innerHTML = `<div><span class="notice-date">${n.date}</span><span class="notice-title">${n.title}</span></div>${body}`;
-    list.appendChild(li);
-  });
-});
+function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+(async function () {
+  try {
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) document.getElementById('noticeWriteBtn').hidden = false;
+  } catch (err) { /* 비로그인 상태면 무시 */ }
+
+  try {
+    const items = await fetchMergedNotices();
+    const list = document.getElementById('notice-list-page');
+    if (items.length === 0) {
+      list.innerHTML = '<li class="gallery-empty">아직 등록된 공지사항이 없습니다.</li>';
+      return;
+    }
+    list.innerHTML = items.map(n => {
+      const titleHtml = n.id
+        ? `<a href="/pages/news-notice-view.html?id=${encodeURIComponent(n.id)}" style="color:inherit;text-decoration:none;">${escHtml(n.title)}${n.fileUrl ? ' 📎' : ''}</a>`
+        : escHtml(n.title);
+      const body = (!n.id && n.body) ? `<p style="margin-top:8px;color:var(--text-gray);font-size:14px;">${escHtml(n.body).replace(/\n/g,'<br>')}</p>` : '';
+      return `<li style="display:block;"><div><span class="notice-date">${n.date}</span><span class="notice-title">${titleHtml}</span></div>${body}</li>`;
+    }).join('');
+  } catch (err) {
+    document.getElementById('notice-list-page').innerHTML = '<li class="gallery-empty">공지사항을 불러오지 못했습니다.</li>';
+  }
+})();
 </script>
 </body>
 </html>

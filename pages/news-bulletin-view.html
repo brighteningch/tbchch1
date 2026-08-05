@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주보 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">CHURCH NEWS</span>
+  <h1>주보</h1>
+  <p>매주 주보를 안내합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:820px;">
+  <h2 class="sermon-view-title" id="bulletinTitle"></h2>
+  <p class="sermon-view-meta" style="margin-bottom:20px;"><span id="bulletinDate"></span></p>
+  <div id="bulletinFileWrap" style="margin-bottom:24px;"></div>
+  <div class="sermon-view-body" id="bulletinBody"></div>
+  <div class="sermon-form-actions" style="margin-top:24px;">
+    <a href="/pages/news-bulletin.html" class="btn btn-ghost">목록으로</a>
+    <a href="#" class="btn btn-ghost" id="bulletinEditBtn" hidden>수정</a>
+    <button type="button" class="btn btn-ghost" id="bulletinDeleteBtn" hidden>삭제</button>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/weekly-content-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const params = new URLSearchParams(location.search);
+const idParam = params.get('id') || '';
+
+(async function () {
+  try {
+    const item = await fetchWeeklyContentById(idParam);
+    const d = item.data || {};
+    document.getElementById('bulletinTitle').textContent = item.title || '';
+    document.getElementById('bulletinDate').textContent = item.period || '';
+    document.getElementById('bulletinBody').innerHTML = (d.body || '').split('\n').map(l => escHtml(l)).join('<br>');
+
+    const fileWrap = document.getElementById('bulletinFileWrap');
+    if (d.fileType === 'image' && d.fileUrl) {
+      fileWrap.innerHTML = `<img src="${d.fileUrl}" alt="${escHtml(item.title)}" style="max-width:100%;border-radius:12px;">`;
+    } else if (d.fileType === 'pdf' && d.fileUrl) {
+      fileWrap.innerHTML = `
+        <iframe src="${d.fileUrl}" style="width:100%;height:600px;border:1px solid var(--border-light);border-radius:12px;"></iframe>
+        <div style="text-align:center;margin-top:12px;"><a href="${d.fileUrl}" target="_blank" rel="noopener" class="btn btn-ghost">PDF 새 탭에서 열기 ↗</a></div>`;
+    }
+
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) {
+      const editBtn = document.getElementById('bulletinEditBtn');
+      editBtn.hidden = false;
+      editBtn.href = `/pages/admin-news.html?tab=bulletin&edit=${encodeURIComponent(item.id)}`;
+
+      const deleteBtn = document.getElementById('bulletinDeleteBtn');
+      deleteBtn.hidden = false;
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm('이 주보를 삭제할까요? 되돌릴 수 없습니다.')) return;
+        try {
+          await deleteWeeklyContent(item.id);
+          if (d.filePath) {
+            const sb = requireSupabaseClient();
+            await sb.storage.from('devotion-images').remove([d.filePath]);
+          }
+          location.href = '/pages/news-bulletin.html';
+        } catch (err) {
+          alert('삭제 중 오류가 발생했습니다: ' + err.message);
+        }
+      });
+    }
+  } catch (err) {
+    document.getElementById('bulletinTitle').textContent = '내용을 찾을 수 없습니다.';
+  }
+})();
+</script>
+</body>
+</html>

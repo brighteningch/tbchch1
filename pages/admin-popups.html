@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>홈페이지 팝업 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .dl-thumb { width:64px; height:64px; object-fit:cover; border-radius:8px; display:block; }
+  .field-hint { font-size:12.5px; color:var(--text-gray); margin-top:-8px; }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">ADMIN</span>
+  <h1>홈페이지 팝업 관리</h1>
+  <p>홈페이지 접속 시 뜨는 "이번 주 소식" 팝업(유튜브 쇼츠 또는 광고 이미지)을 등록·교체합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="adminGuard" class="admin-guard" hidden>
+    <p>관리자만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="adminContent" hidden>
+    <form id="form-sc" class="sermon-form">
+      <div class="sermon-form-row">
+        <label>날짜
+          <input type="date" id="sc-date" required>
+        </label>
+        <label>유형
+          <select id="sc-type">
+            <option value="video">유튜브 쇼츠 링크</option>
+            <option value="image">광고 이미지</option>
+          </select>
+        </label>
+      </div>
+      <label id="sc-url-field">유튜브 쇼츠 링크
+        <input type="text" id="sc-url" placeholder="https://www.youtube.com/shorts/xxxxxxxxxxx">
+      </label>
+      <label id="sc-image-field" hidden>광고 이미지 파일
+        <input type="file" id="sc-image" accept="image/*">
+      </label>
+      <div class="sermon-form-actions">
+        <button type="submit" class="btn btn-primary" id="sc-submit-btn">등록하기</button>
+      </div>
+      <p class="auth-error" id="sc-error" hidden></p>
+    </form>
+    <p class="field-hint">홈페이지에는 가장 최근에 등록한 항목 1개만 팝업으로 노출됩니다. 새로 등록하면 자동으로 교체되고, 목록에서 삭제하면 내려갑니다.</p>
+
+    <div class="admin-toolbar" style="margin-top:36px;">
+      <p style="font-weight:700;">등록된 홈페이지 팝업</p>
+    </div>
+    <div class="sermon-table-wrap">
+      <table class="sermon-table">
+        <thead><tr><th>날짜</th><th>유형</th><th>내용</th><th>관리</th></tr></thead>
+        <tbody id="sc-tbody"></tbody>
+      </table>
+    </div>
+    <p class="sermon-empty" id="sc-empty" hidden>등록된 팝업이 없습니다.</p>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/weekly-content-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+let __scList = [];
+const SC_BUCKET = 'devotion-images';
+const SC_FOLDER = 'popup-ads';
+
+document.getElementById('sc-type').addEventListener('change', (e) => {
+  const isImage = e.target.value === 'image';
+  document.getElementById('sc-url-field').hidden = isImage;
+  document.getElementById('sc-image-field').hidden = !isImage;
+});
+
+async function loadShortsList() {
+  __scList = await fetchWeeklyContent('shorts');
+  const tbody = document.getElementById('sc-tbody');
+  const empty = document.getElementById('sc-empty');
+  if (__scList.length === 0) { tbody.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  tbody.innerHTML = __scList.map((item, i) => {
+    const d = item.data || {};
+    const isImage = d.type === 'image';
+    const content = isImage
+      ? `<img class="dl-thumb" src="${esc(d.imageUrl || '')}" alt="">`
+      : `<a href="${esc(d.videoUrl || '')}" target="_blank" rel="noopener">${esc(d.videoUrl || '')}</a>`;
+    return `
+    <tr>
+      <td>${esc(item.period)}${i === 0 ? ' <span style="color:var(--navy);font-weight:700;">(노출중)</span>' : ''}</td>
+      <td>${isImage ? '광고 이미지' : '유튜브 쇼츠'}</td>
+      <td>${content}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-delete="${item.id}">삭제</button></td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removeShorts(btn.dataset.delete)));
+}
+
+async function removeShorts(id) {
+  if (!confirm('이 팝업을 내릴까요? 되돌릴 수 없습니다.')) return;
+  const item = __scList.find(x => x.id === id);
+  try {
+    await deleteWeeklyContent(id);
+    if (item && item.data && item.data.imagePath) {
+      const sb = requireSupabaseClient();
+      await sb.storage.from(SC_BUCKET).remove([item.data.imagePath]);
+    }
+    await loadShortsList();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('form-sc').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('sc-error');
+  errorEl.hidden = true;
+  const date = document.getElementById('sc-date').value;
+  const type = document.getElementById('sc-type').value;
+  const submitBtn = document.getElementById('sc-submit-btn');
+  if (!date) return;
+  submitBtn.disabled = true;
+  try {
+    let data;
+    if (type === 'image') {
+      const file = document.getElementById('sc-image').files[0];
+      if (!file) { submitBtn.disabled = false; return; }
+      submitBtn.textContent = '업로드 중…';
+      const sb = requireSupabaseClient();
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${SC_FOLDER}/${date}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await sb.storage.from(SC_BUCKET).upload(path, file, { upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: pub } = sb.storage.from(SC_BUCKET).getPublicUrl(path);
+      data = { type: 'image', imageUrl: pub.publicUrl, imagePath: path };
+    } else {
+      const url = document.getElementById('sc-url').value.trim();
+      if (!url) { submitBtn.disabled = false; return; }
+      submitBtn.textContent = '등록 중…';
+      data = { type: 'video', videoUrl: url };
+    }
+    await createWeeklyContent({ category: 'shorts', title: date, period: date, data });
+    document.getElementById('form-sc').reset();
+    document.getElementById('sc-url-field').hidden = false;
+    document.getElementById('sc-image-field').hidden = true;
+    await loadShortsList();
+  } catch (err) {
+    errorEl.textContent = '저장 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '등록하기';
+  }
+});
+
+async function initAdminPopupsPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_admin) {
+    document.getElementById('adminGuard').hidden = false;
+    return;
+  }
+  document.getElementById('adminContent').hidden = false;
+  await loadShortsList();
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminPopupsPage, 400));
+</script>
+</body>
+</html>

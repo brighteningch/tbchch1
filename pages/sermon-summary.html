@@ -37,6 +37,10 @@
     </div>
   </aside>
     <div class="sermon-main">
+      <div class="community-board-header" style="margin-top:0;">
+        <div></div>
+        <a href="/pages/admin-sermons.html?category=3min" class="btn btn-primary btn-sm" id="summaryWriteBtn" hidden>글쓰기</a>
+      </div>
       <div class="sermon-table-wrap">
         <table class="sermon-table">
           <thead>
@@ -55,9 +59,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
+<script src="/sermons-data.js"></script>
 <script src="/common.js"></script>
 <script>
 function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function extractYoutubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
+  return m ? m[1] : null;
+}
 const SUMMARY_PER_PAGE = 15;
 (async function () {
   const tbody = document.getElementById('summary-tbody');
@@ -68,23 +78,49 @@ const SUMMARY_PER_PAGE = 15;
     const start = (page - 1) * SUMMARY_PER_PAGE;
     const pageItems = items.slice(start, start + SUMMARY_PER_PAGE);
     tbody.innerHTML = pageItems.map((v, i) => {
-      const link = `https://www.youtube.com/watch?v=${v.videoId}`;
+      const link = v.sermonId ? `/pages/sermon-view.html?id=${encodeURIComponent(v.sermonId)}` : `https://www.youtube.com/watch?v=${v.videoId}`;
+      const linkAttrs = v.sermonId ? '' : ' target="_blank" rel="noopener"';
       const num = items.length - (start + i);
       return `
       <tr>
         <td>${num}</td>
-        <td class="sermon-title"><a href="${link}" target="_blank" rel="noopener">${escHtml(v.title)}</a></td>
-        <td>${(v.publishedAt || '').slice(0, 10)}</td>
-        <td><a href="${link}" target="_blank" rel="noopener" class="sermon-watch" aria-label="영상보기">▶</a></td>
+        <td class="sermon-title"><a href="${link}"${linkAttrs}>${escHtml(v.title)}</a></td>
+        <td>${(v.date || '').slice(0, 10)}</td>
+        <td><a href="${link}"${linkAttrs} class="sermon-watch" aria-label="영상보기">▶</a></td>
       </tr>`;
     }).join('');
     renderPagination(paginationEl, items.length, SUMMARY_PER_PAGE, page, renderRows);
   }
 
   try {
-    const res = await fetch('/.netlify/functions/youtube-playlist');
-    const data = await res.json();
-    items = data.items || [];
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) {
+      document.getElementById('summaryWriteBtn').hidden = false;
+    }
+  } catch (err) { /* 비로그인 상태면 무시 */ }
+
+  try {
+    const [playlistRes, manualSermons] = await Promise.all([
+      fetch('/.netlify/functions/youtube-playlist').then(r => r.json()).catch(() => ({ items: [] })),
+      fetchSermons('3min').catch(() => []),
+    ]);
+
+    const playlistItems = (playlistRes.items || []).map(v => ({
+      title: v.title, date: (v.publishedAt || '').slice(0, 10), videoId: v.videoId, sermonId: null,
+    }));
+    const manualItems = manualSermons.map(s => ({
+      title: s.title, date: s.date, videoId: extractYoutubeId(s.video_url), sermonId: s.id,
+    }));
+
+    // 재생목록에 이미 있는 영상을 수동으로 또 등록했으면 수동 등록본(수정/삭제 가능)을 우선한다
+    const manualVideoIds = new Set(manualItems.map(m => m.videoId).filter(Boolean));
+    const merged = [
+      ...manualItems,
+      ...playlistItems.filter(p => !manualVideoIds.has(p.videoId)),
+    ];
+    merged.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+    items = merged;
     if (items.length === 0) {
       document.getElementById('summary-empty').hidden = false;
       return;
