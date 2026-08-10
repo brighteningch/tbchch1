@@ -2,6 +2,14 @@ backend:
   name: git-gateway
   branch: main
 
+# 저장하면 main에 바로 반영되지 않는다. 대신 cms/... 이름의 별도 브랜치와 PR이 만들어지고
+# 관리자 화면 상단 '워크플로우' 탭에 초안으로 쌓인다. 거기서 내용을 확인한 뒤 직접
+# 'Publish(배포)' 버튼을 눌러야 PR이 main에 병합되면서 홈페이지에 실제로 배포된다.
+# (오너 요청: 확인 후 내가 클릭해서 배포하고 싶다, 2026-08-10 / 근거: decapcms.org 공식문서
+#  Editorial Workflow — "Commits to a new branch (cms/collectionName/entrySlug), opens a pull
+#  request" → "Approve and publish draft: Merges pull request and deletes branch")
+publish_mode: editorial_workflow
+
 media_folder: "admin/uploads"
 public_folder: "/admin/uploads"
 
