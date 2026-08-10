@@ -60,9 +60,13 @@ collections:
             name: "offering"
             widget: object
             fields:
-              - { label: "계좌 정보", name: "bank_info", widget: string }
               - { label: "예금주", name: "holder", widget: string }
-              - { label: "안내 문구", name: "note", widget: string }
+              - label: "계좌 목록"
+                name: "accounts"
+                widget: list
+                fields:
+                  - { label: "구분", name: "label", widget: string }
+                  - { label: "계좌 정보", name: "info", widget: string }
 
           - label: "매일 묵상 말씀 (팝업에 매일 하나씩 자동으로 바뀌어 표시됩니다)"
             name: "daily_verses"
