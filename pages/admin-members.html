@@ -69,11 +69,11 @@ function renderMembers(members) {
   document.getElementById('memberCount').textContent = `전체 회원 ${members.length}명`;
   document.getElementById('memberTbody').innerHTML = members.map(m => `
     <tr>
-      <td>${esc(m.name)}</td>
-      <td>${esc(m.position)}</td>
-      <td>${(m.created_at || '').slice(0,10)}</td>
-      <td>${m.is_admin ? '✓' : ''}</td>
-      <td><button type="button" class="btn btn-ghost reset-password-btn" data-user-id="${esc(m.id)}" data-user-name="${esc(m.name)}">비밀번호 재설정</button></td>
+      <td data-label="이름">${esc(m.name)}</td>
+      <td data-label="직분">${esc(m.position)}</td>
+      <td data-label="가입일" class="member-table-joindate">${(m.created_at || '').slice(0,10)}</td>
+      <td data-label="관리자">${m.is_admin ? '✓' : ''}</td>
+      <td class="member-table-action"><button type="button" class="btn btn-ghost reset-password-btn" data-user-id="${esc(m.id)}" data-user-name="${esc(m.name)}">비밀번호 재설정</button></td>
     </tr>`).join('');
 }
 

@@ -1277,6 +1277,33 @@ section { padding: 88px 0; }
   .gallery-album-date { padding: 3px 10px 12px; font-size: 11px; }
   .gallery-desc { margin-bottom: 16px; }
   #kakaoMap { height: 260px !important; }
+
+  /* 회원 관리 테이블 → 카드형(가로스크롤 없이 세로로 쌓임). 가입일 열은 좁은 화면에서
+     덜 중요한 정보라 숨긴다(오너 요청, 2026-08-10).
+     ★.member-table-wrap을 앞에 붙여 상세도(specificity)를 올렸다 — 안 그러면 이 파일
+     뒤쪽(1315번줄 부근)의 원래 .member-table{min-width:640px} 등 데스크톱 규칙과
+     상세도가 같아져서 미디어쿼리 안에 있어도 파일에서 나중에 나오는 원래 규칙이
+     이겨버린다(실제로 헤드리스 브라우저로 겪은 버그 — computed style로 확인 후 수정). */
+  .member-table-wrap { overflow-x: visible; background: transparent; box-shadow: none; }
+  .member-table-wrap .member-table { min-width: 0; width: 100%; }
+  .member-table-wrap .member-table thead { display: none; }
+  .member-table-wrap .member-table,
+  .member-table-wrap .member-table tbody,
+  .member-table-wrap .member-table tr,
+  .member-table-wrap .member-table td { display: block; width: 100%; }
+  .member-table-wrap .member-table tr {
+    background: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    box-shadow: 0 6px 18px rgba(15,40,70,0.06);
+  }
+  .member-table-wrap .member-table td {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border-light); font-size: 14px;
+  }
+  .member-table-wrap .member-table td::before { content: attr(data-label); font-weight: 700; color: var(--text-gray); font-size: 12px; }
+  .member-table-wrap .member-table td:empty { display: none; } /* 관리자 아닌 회원은 '관리자' 행 자체를 숨김 */
+  .member-table-wrap .member-table td.member-table-joindate { display: none; } /* 가입일 열 숨김 */
+  .member-table-wrap .member-table td.member-table-action { border-bottom: none; padding-top: 12px; }
+  .member-table-wrap .member-table-action .reset-password-btn { width: 100%; padding: 10px; font-size: 13.5px; box-sizing: border-box; }
 }
 
 /* ---------- 로그인/회원가입 폼 ---------- */
