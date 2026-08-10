@@ -67,12 +67,7 @@ fetch('/content/site.json')
         </table>
       </div>`;
 
-    // 헌금안내: 계좌 목록 렌더
-    document.getElementById('offering-accounts').innerHTML = data.offering.accounts.map(a => `
-      <div class="offering-account">
-        <span class="offering-label">${a.label}</span>
-        <span class="offering-info">${a.info}</span>
-      </div>`).join('');
+    // 헌금안내(계좌 목록)는 홈페이지에서 제거됨 — /pages/online-offering.html 에서 렌더링(2026-08-10)
 
     // 빠른링크 예배시간 요약(1부/2부만)
     const w1 = data.worship[0], w2 = data.worship[1];
