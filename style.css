@@ -1297,6 +1297,19 @@ section { padding: 88px 0; }
 .auth-error { color: #c0392b; font-size: 13.5px; }
 .auth-switch { text-align: center; font-size: 13.5px; color: var(--text-gray); }
 .auth-switch a { color: var(--navy); font-weight: 600; }
+.auth-forgot-toggle {
+  display: block; width: 100%; text-align: center; margin-top: 14px;
+  background: none; border: none; color: var(--text-gray);
+  font-size: 13px; text-decoration: underline; cursor: pointer;
+  font-family: var(--font-body);
+}
+.auth-forgot-toggle:hover { color: var(--navy); }
+.auth-forgot-info {
+  margin-top: 12px; padding: 16px; background: var(--bg-cool);
+  border-radius: 10px; font-size: 13.5px; line-height: 1.6; color: var(--text-dark);
+}
+.auth-forgot-info p:first-child { margin-bottom: 10px; color: var(--text-gray); }
+.auth-forgot-info p { margin-bottom: 4px; }
 
 /* ---------- 관리자 회원관리 테이블 ---------- */
 .member-table-wrap { background: #fff; border-radius: 16px; overflow-x: auto; box-shadow: 0 10px 30px rgba(15,40,70,0.06); }
@@ -1307,6 +1320,29 @@ section { padding: 88px 0; }
 .member-table tr:nth-child(even) { background: var(--bg-cool); }
 .admin-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
 .admin-guard { text-align: center; padding: 60px 20px; color: var(--text-gray); }
+.reset-password-btn { font-size: 12.5px; padding: 6px 12px; }
+
+/* ---------- 범용 모달(비밀번호 재설정 결과 등) ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 30, 45, 0.55);
+}
+.modal-backdrop[hidden] { display: none; }
+.modal-box {
+  background: #fff; border-top: 4px solid var(--navy); border-radius: 16px;
+  width: 420px; max-width: calc(100vw - 32px); padding: 28px 26px;
+  box-shadow: 0 24px 60px rgba(15, 40, 70, 0.25);
+}
+.reset-password-display {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  background: var(--bg-cool); border-radius: 10px; padding: 14px 16px;
+}
+.reset-password-display code {
+  font-size: 18px; font-weight: 700; letter-spacing: 0.5px; color: var(--navy);
+  flex: 1; word-break: break-all;
+}
+.reset-password-warning { font-size: 12.5px; color: #c0392b; margin-bottom: 16px; line-height: 1.5; }
 
 /* ---------- 말씀과 찬양: 목록 테이블 ---------- */
 .sermon-table-wrap { background: #fff; border-radius: 16px; overflow-x: auto; box-shadow: 0 10px 30px rgba(15,40,70,0.06); }
