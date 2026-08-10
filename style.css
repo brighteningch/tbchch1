@@ -691,6 +691,28 @@ body {
 
 /* ---------- Sections ---------- */
 section { padding: 88px 0; }
+
+/* 관리자에서 섹션 배경사진을 올린 경우에만 적용된다(common.js가 사진이 있을 때만
+   .has-bg-image 클래스와 인라인 background-image를 붙인다 — 사진이 없으면 아래 규칙은
+   전혀 관여하지 않고 각 섹션의 원래 배경색이 그대로 유지된다).
+   사진 위에 글자가 얹히면 가독성이 떨어지므로 흰색 반투명 오버레이를 깔아준다. */
+.has-bg-image {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.has-bg-image::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.82);
+  pointer-events: none;
+}
+.has-bg-image > * {
+  position: relative;
+  z-index: 1;
+}
 .section-title {
   font-size: 30px;
   font-weight: 800;

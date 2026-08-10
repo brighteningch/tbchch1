@@ -39,6 +39,15 @@ collections:
                 fields:
                   - { label: "사진", name: "image", widget: image }
 
+          - label: "섹션 배경사진 (메인화면 각 구역의 배경으로 깔릴 사진)"
+            name: "section_backgrounds"
+            widget: object
+            hint: "사진을 올리면 해당 구역 배경으로 깔립니다. 글씨가 잘 보이도록 사진 위에 흰색 반투명 막이 자동으로 덮입니다. 비워두면 원래 배경색이 그대로 유지됩니다. 가로로 긴 사진(16:9 등)을 권장합니다."
+            fields:
+              - { label: "교회소개 (사람이 교회입니다)", name: "about", widget: image, required: false }
+              - { label: "예배안내 (정규 예배 시간표)", name: "worship", widget: image, required: false }
+              - { label: "오시는길", name: "visit", widget: image, required: false }
+
           - label: "교회소개"
             name: "about"
             widget: object

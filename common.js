@@ -18,6 +18,39 @@ function applyBindings(root, data) {
   });
 }
 
+// 섹션 배경사진: data-bg="section_backgrounds.about" 같은 속성이 붙은 요소에
+// 관리자가 올린 사진을 배경으로 깔아준다. 사진이 비어있으면 아무것도 하지 않아서
+// 원래 배경색이 그대로 유지된다.
+// ★이 함수는 site.json 로드 콜백 안에서 불린다. 여기서 예외가 던져지면 같은 콜백에
+// 이어 붙어있는 렌더링(예배표·유튜브·인스타·갤러리·히어로 슬라이드 등)이 전부 조용히
+// 멈추기 때문에, 전체를 try/catch로 감싸고 요소별로도 개별 보호한다.
+function applySectionBackgrounds(root, data) {
+  try {
+    if (!root || !data) return;
+    root.querySelectorAll('[data-bg]').forEach(el => {
+      try {
+        const path = el.getAttribute('data-bg').split('.');
+        let value = data;
+        for (const key of path) {
+          value = value ? value[key] : undefined;
+        }
+        if (typeof value === 'string' && value.trim() !== '') {
+          el.style.backgroundImage = `url("${value}")`;
+          el.classList.add('has-bg-image');
+        } else {
+          // 사진을 지웠을 때 원래 배경색으로 되돌린다
+          el.style.backgroundImage = '';
+          el.classList.remove('has-bg-image');
+        }
+      } catch (elErr) {
+        console.error('섹션 배경 적용 실패(해당 섹션만 건너뜀):', elErr);
+      }
+    });
+  } catch (err) {
+    console.error('applySectionBackgrounds 실패(나머지 렌더링은 계속 진행):', err);
+  }
+}
+
 function initMegaMenu() {
   document.querySelectorAll('.mm-item').forEach(item => {
     const trigger = item.querySelector('.mm-trigger');
@@ -158,6 +191,7 @@ function loadSiteData(callback) {
     .then(data => {
       window.__siteData = data;
       applyBindings(document, data);
+      applySectionBackgrounds(document, data);
       if (data.contact && data.contact.instagram_url) {
         const igLink = document.getElementById('instagramLink');
         if (igLink) { igLink.href = data.contact.instagram_url; igLink.style.display = ''; }
