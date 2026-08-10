@@ -91,8 +91,54 @@ fetch('/content/site.json')
     // 메인 배경 사진 슬라이드 (15초마다 자동 전환)
     initHeroSlides(data.hero.images);
 
+    // 매거진 소개(활천 등) — 관리자가 site.json에서 갱신. 이 콜백은 하나의 순차 체인이라
+    // (project_brighteningch-scriptjs-monolithic-then-chain 참고) 여기서 에러가 나도
+    // 앞에서 이미 실행된 예배표·퀵링크·갤러리·히어로슬라이드는 영향받지 않지만, 방어적으로
+    // try/catch로 감싸 향후 이 자리 뒤에 코드가 추가되더라도 안전하게 만든다.
+    try {
+      renderPress(data.press);
+    } catch (err) {
+      console.error('매거진 소개 섹션 렌더링 실패(다른 섹션에는 영향 없음):', err);
+      const pressSection = document.getElementById('press');
+      if (pressSection) pressSection.hidden = true;
+    }
+
   })
   .catch(err => console.error('site.json 로드 실패:', err));
+
+// 매거진 소개(활천 등) 섹션 렌더링. 슬라이드가 하나도 없거나 PDF 파일이 없으면
+// (관리자가 아직 등록 안 했거나 전부 지웠을 때) 섹션 자체를 숨겨 빈 화면이 노출되지 않게 한다.
+function renderPress(press) {
+  const section = document.getElementById('press');
+  if (!section) return;
+
+  const hasSlides = press && Array.isArray(press.slides) && press.slides.length > 0;
+  const hasPdf = press && typeof press.pdf_file === 'string' && press.pdf_file.trim() !== '';
+  if (!hasSlides || !hasPdf) {
+    section.hidden = true;
+    return;
+  }
+
+  document.getElementById('pressTitle').textContent = press.title || '';
+  document.getElementById('pressDesc').textContent = press.description || '';
+  document.getElementById('pressFeatureCard').href = press.pdf_file;
+
+  const slideshow = document.getElementById('pressSlideshow');
+  slideshow.innerHTML = '';
+  press.slides.forEach((slide, i) => {
+    const img = document.createElement('img');
+    img.className = 'press-slide' + (i === 0 ? ' is-active' : '');
+    img.src = slide.image;
+    img.alt = `${press.title || '매거진 소개'} - ${i + 1}페이지`;
+    slideshow.appendChild(img);
+  });
+
+  section.hidden = false;
+  // initPressSlideshow()는 스크립트 로드 시점에 이미 한 번 호출됐지만, 그때는 슬라이드가
+  // 0개(정적 HTML에 아무것도 없음)라 곧바로 리턴했다 — 방금 슬라이드를 실제로 넣었으니
+  // 자동 전환 타이머를 여기서 다시 설정한다.
+  initPressSlideshow();
+}
 
 // 이미지 자체에 이미 문구가 박혀있는 슬라이드(overlay:false)는 사이트 자체 제목/성구 문구를 숨긴다
 function initHeroSlides(images) {

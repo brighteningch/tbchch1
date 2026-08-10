@@ -64,6 +64,21 @@ collections:
               - { label: "예배안내 (정규 예배 시간표)", name: "worship", widget: image, required: false }
               - { label: "오시는길", name: "visit", widget: image, required: false }
 
+          - label: "매거진 소개(활천 등)"
+            name: "press"
+            widget: object
+            hint: "새 특집기사가 나올 때마다 여기서 갱신하면 홈페이지 화면이 함께 바뀝니다. 슬라이드 사진을 전부 지우면 이 섹션은 홈페이지에서 자동으로 숨겨집니다."
+            fields:
+              - { label: "제목", name: "title", widget: string }
+              - { label: "설명 문구", name: "description", widget: text }
+              - { label: "기사 PDF 파일", name: "pdf_file", widget: file, required: false }
+              - label: "소개 사진 슬라이드"
+                name: "slides"
+                widget: list
+                required: false
+                fields:
+                  - { label: "사진", name: "image", widget: image }
+
           - label: "교회소개"
             name: "about"
             widget: object
