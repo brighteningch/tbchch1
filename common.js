@@ -18,6 +18,67 @@ function applyBindings(root, data) {
   });
 }
 
+// ---------- 사이트 서체(폰트) ----------
+// 관리자에서 고른 서체를 사이트 전체에 적용한다. 후보는 전부 SIL Open Font License 1.1이라
+// 상업적 이용이 가능하다(2026-08-10에 각 폰트의 CDN 응답과 라이선스 원문을 직접 확인).
+//   - pretendard   : cdn.jsdelivr.net(CSS 헤더에 OFL 1.1 명시) — 기존 사이트 기본값
+//   - noto-sans-kr : google/fonts METADATA.pb license "OFL", 고딕
+//   - noto-serif-kr: google/fonts METADATA.pb license "OFL", 명조
+//   - gowun-batang : google/fonts METADATA.pb license "OFL", 명조(부드러운 인상)
+//   - nanum-myeongjo: google/fonts METADATA.pb license "OFL", 명조(전통적)
+var JAVIS_FONTS = {
+  'pretendard': {
+    href: 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css',
+    stack: "'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif"
+  },
+  'noto-sans-kr': {
+    href: 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap',
+    stack: "'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif"
+  },
+  'noto-serif-kr': {
+    href: 'https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;700;900&display=swap',
+    stack: "'Noto Serif KR', Georgia, serif"
+  },
+  'gowun-batang': {
+    href: 'https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap',
+    stack: "'Gowun Batang', Georgia, serif"
+  },
+  'nanum-myeongjo': {
+    href: 'https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap',
+    stack: "'Nanum Myeongjo', Georgia, serif"
+  }
+};
+
+// ★site.json 로드 콜백 안에서 실행되므로, 여기서 예외가 나면 뒤따르는 렌더링이 전부 멈춘다.
+// 전체를 try/catch로 감싸고, 폰트 CDN이 죽어도 stack 끝의 시스템 기본 글꼴로 자연히 폴백된다
+// (link 로드 실패는 예외를 던지지 않고 브라우저가 조용히 무시하며, font-family 목록의
+//  다음 후보가 쓰인다).
+function applySiteFont(data) {
+  try {
+    if (!data || !data.design) return;
+    var id = data.design.font_id;
+    if (!id) return;
+    var font = JAVIS_FONTS[id];
+    if (!font) {
+      console.warn('알 수 없는 서체 id, 기본 서체 유지:', id);
+      return;
+    }
+    if (!document.getElementById('siteFontLink')) {
+      var link = document.createElement('link');
+      link.id = 'siteFontLink';
+      link.rel = 'stylesheet';
+      link.href = font.href;
+      link.onerror = function () {
+        console.error('서체 CDN 로드 실패, 시스템 기본 글꼴로 표시됩니다:', font.href);
+      };
+      document.head.appendChild(link);
+    }
+    document.documentElement.style.setProperty('--font-body', font.stack);
+  } catch (err) {
+    console.error('applySiteFont 실패(기본 서체로 계속 진행):', err);
+  }
+}
+
 // 섹션 배경사진: data-bg="section_backgrounds.about" 같은 속성이 붙은 요소에
 // 관리자가 올린 사진을 배경으로 깔아준다. 사진이 비어있으면 아무것도 하지 않아서
 // 원래 배경색이 그대로 유지된다.
@@ -190,6 +251,7 @@ function loadSiteData(callback) {
     .then(res => res.json())
     .then(data => {
       window.__siteData = data;
+      applySiteFont(data);
       applyBindings(document, data);
       applySectionBackgrounds(document, data);
       if (data.contact && data.contact.instagram_url) {

@@ -39,6 +39,22 @@ collections:
                 fields:
                   - { label: "사진", name: "image", widget: image }
 
+          - label: "사이트 서체 (홈페이지 전체 글꼴)"
+            name: "design"
+            widget: object
+            fields:
+              - label: "글꼴 선택"
+                name: "font_id"
+                widget: select
+                default: "pretendard"
+                hint: "홈페이지 모든 페이지의 글꼴이 한번에 바뀝니다. 고딕체는 깔끔하고 현대적이며, 명조체는 차분하고 전통적인 느낌을 줍니다."
+                options:
+                  - { label: "프리텐다드 (고딕체 · 현재 기본값)", value: "pretendard" }
+                  - { label: "본고딕 Noto Sans (고딕체)", value: "noto-sans-kr" }
+                  - { label: "본명조 Noto Serif (명조체)", value: "noto-serif-kr" }
+                  - { label: "고운바탕 (명조체 · 부드러운 느낌)", value: "gowun-batang" }
+                  - { label: "나눔명조 (명조체 · 전통적인 느낌)", value: "nanum-myeongjo" }
+
           - label: "섹션 배경사진 (메인화면 각 구역의 배경으로 깔릴 사진)"
             name: "section_backgrounds"
             widget: object
