@@ -1318,6 +1318,7 @@ section { padding: 88px 0; }
 
 /* ---------- 로그인/회원가입 폼 ---------- */
 .auth-form { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+.auth-form[hidden] { display: none; }
 .auth-form label {
   display: flex; flex-direction: column; gap: 6px;
   font-size: 13.5px; font-weight: 600; color: var(--text-dark);
@@ -1332,6 +1333,7 @@ section { padding: 88px 0; }
 }
 .auth-form input:focus { border-color: var(--navy); }
 .auth-error { color: #c0392b; font-size: 13.5px; }
+.auth-success { color: #1e7e45; font-size: 13.5px; }
 .auth-switch { text-align: center; font-size: 13.5px; color: var(--text-gray); }
 .auth-switch a { color: var(--navy); font-weight: 600; }
 .auth-forgot-toggle {
