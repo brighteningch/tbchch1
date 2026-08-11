@@ -273,10 +273,19 @@ const POPUP_DEFS = [
   },
 ];
 
+// 새벽기도 묵상은 이미지 업로드 대신 목사님의 티스토리 '묵상' 카테고리로 바로 연결한다
+// (오너 요청, 2026-08-11 — 매일 티스토리에 올리는 묵상 글이 곧 새벽기도 묵상 자료이므로
+// 별도 이미지 업로드 없이 그 글로 바로 이동시키는 게 더 실용적).
+const DAWN_PRAYER_TISTORY_URL = 'https://eshallom.tistory.com/category/%EB%AC%B5%EC%83%81';
+
 function wireContentCategoryButtons(box, onOpen) {
   box.querySelectorAll('[data-content-category]').forEach(btn => {
     btn.addEventListener('click', () => {
       onOpen();
+      if (btn.dataset.contentCategory === 'dawn-prayer') {
+        window.open(DAWN_PRAYER_TISTORY_URL, '_blank', 'noopener');
+        return;
+      }
       openContentLightbox(btn.dataset.contentCategory);
     });
   });
