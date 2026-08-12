@@ -71,6 +71,9 @@ alter table magazine_posts add column if not exists thumbnail_path text;
 -- 관리자가 UI에서 직접 값을 바꾸는 전역 설정(예: 홈페이지 교회뉴스 featured 카드 자동전환
 -- 간격 초)을 위한 최소 key-value 테이블. content/site.json은 정적 파일이라 비개발자인
 -- 오너가 직접 편집하기 어려워 이 용도로는 부적합하다고 판단해 신설한다.
+-- ★보안 경계(reviewer-codex 검토 지적, 2026-08-12): select는 비로그인 방문자에게도
+-- 공개된 테이블이다(홈페이지가 로그인 없이 featured 간격값을 읽어야 하므로). API 키,
+-- 서비스 시크릿, 그 외 비공개로 유지해야 하는 값은 이 테이블에 절대 넣지 말 것.
 create table if not exists app_settings (
   key text primary key,
   value text not null,
