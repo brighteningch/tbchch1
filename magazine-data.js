@@ -30,6 +30,13 @@ async function createMagazinePost(payload) {
   return data;
 }
 
+async function updateMagazinePost(id, payload) {
+  const sb = requireSupabaseClient();
+  const { data, error } = await sb.from("magazine_posts").update(payload).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
 async function deleteMagazinePost(id) {
   const sb = requireSupabaseClient();
   const { error } = await sb.from("magazine_posts").delete().eq("id", id);

@@ -57,3 +57,29 @@ create policy "magazine-files admin update" on storage.objects
 drop policy if exists "magazine-files admin delete" on storage.objects;
 create policy "magazine-files admin delete" on storage.objects
   for delete using (bucket_id = 'magazine-files' and is_admin());
+
+-- ★2026-08-12: PDF 글의 썸네일(첫 페이지 고정 아이콘 대신 지정 페이지를 실제 이미지로).
+-- thumb_page는 관리자가 글쓰기/수정 시 지정하는 "몇 페이지를 썸네일로 쓸지"(기본 1페이지).
+-- thumbnail_url/thumbnail_path는 관리자 브라우저에서 pdf.js로 렌더링한 결과를 기존
+-- magazine-files 버킷에 올린 것 — 신규 버킷·신규 Storage 정책 불필요(기존 admin
+-- insert/update 정책이 이미 이 버킷 전체를 커버). 이미지 타입 글은 이 두 컬럼을 쓰지 않는다
+-- (file_url을 그대로 썸네일로 사용).
+alter table magazine_posts add column if not exists thumb_page integer not null default 1 check (thumb_page >= 1);
+alter table magazine_posts add column if not exists thumbnail_url text;
+alter table magazine_posts add column if not exists thumbnail_path text;
+
+-- 관리자가 UI에서 직접 값을 바꾸는 전역 설정(예: 홈페이지 교회뉴스 featured 카드 자동전환
+-- 간격 초)을 위한 최소 key-value 테이블. content/site.json은 정적 파일이라 비개발자인
+-- 오너가 직접 편집하기 어려워 이 용도로는 부적합하다고 판단해 신설한다.
+create table if not exists app_settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table app_settings enable row level security;
+drop policy if exists "app_settings read all" on app_settings;
+create policy "app_settings read all" on app_settings for select using (true);
+drop policy if exists "app_settings admin write" on app_settings;
+create policy "app_settings admin write" on app_settings for insert with check (is_admin());
+drop policy if exists "app_settings admin update" on app_settings;
+create policy "app_settings admin update" on app_settings for update using (is_admin());

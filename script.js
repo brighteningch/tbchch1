@@ -115,14 +115,24 @@ function renderMagazinePostBody(post) {
     <span class="magazine-post-badge">${post.file_type === 'pdf' ? 'PDF' : '사진'}</span>`;
 }
 
+// 이미지 글은 file_url을 그대로 썸네일로 쓰고, PDF 글은 관리자가 지정 페이지를 미리
+// 렌더링해둔 thumbnail_url이 있으면 그걸 쓴다 — 아직 재생성 전(구 글)이라 thumbnail_url이
+// 없으면 기존 📄 아이콘 폴백을 유지한다(깨진 이미지 대신 안전한 대체 표시).
+function magazineThumbHtml(post, thumbClass) {
+  if (post.file_type === 'image') {
+    return `<div class="${thumbClass}"><img src="${post.file_url}" alt="${escMagazine(post.title)}" loading="lazy"></div>`;
+  }
+  if (post.thumbnail_url) {
+    return `<div class="${thumbClass}"><img src="${post.thumbnail_url}" alt="${escMagazine(post.title)}" loading="lazy"></div>`;
+  }
+  return `<div class="${thumbClass} ${thumbClass}--pdf">📄</div>`;
+}
+
 function renderMagazineFeaturedCard(post) {
   if (!post) return '<p class="magazine-empty">아직 등록된 글이 없습니다.</p>';
-  const thumb = post.file_type === 'image'
-    ? `<div class="magazine-home-featured-thumb"><img src="${post.file_url}" alt="${escMagazine(post.title)}" loading="lazy"></div>`
-    : `<div class="magazine-home-featured-thumb magazine-home-featured-thumb--pdf">📄</div>`;
   return `
     <a class="magazine-post-card magazine-post-card--featured" href="${post.file_url}" target="_blank" rel="noopener">
-      ${thumb}
+      ${magazineThumbHtml(post, 'magazine-home-featured-thumb')}
       ${renderMagazinePostBody(post)}
     </a>`;
 }
@@ -132,9 +142,34 @@ function renderMagazineOtherItem(category, post) {
     <div class="magazine-home-other-item">
       <p class="magazine-home-other-cat">${escMagazine(category)}</p>
       <a class="magazine-post-card" href="${post.file_url}" target="_blank" rel="noopener">
-        ${renderMagazinePostBody(post)}
+        ${magazineThumbHtml(post, 'magazine-home-other-thumb')}
+        <div class="magazine-home-other-body">
+          ${renderMagazinePostBody(post)}
+        </div>
       </a>
     </div>`;
+}
+
+// 교회뉴스(피처드) 카드는 글이 여러 건이면 설정된 간격(초)마다 다음 글로 자동 전환된다.
+// 간격 값은 하드코딩하지 않고 app_settings에서 읽는다(관리자 UI에서 조절 — admin-magazine.html).
+const MAGAZINE_FEATURED_INTERVAL_SETTING_KEY = 'magazine_featured_interval_seconds';
+const MAGAZINE_FEATURED_INTERVAL_DEFAULT_SECONDS = 8;
+
+function initMagazineFeaturedSlideshow(featuredEl, posts, intervalSeconds) {
+  if (!posts || posts.length === 0) {
+    featuredEl.innerHTML = renderMagazineFeaturedCard(null);
+    return;
+  }
+  let index = 0;
+  featuredEl.innerHTML = renderMagazineFeaturedCard(posts[index]);
+  if (posts.length <= 1) return;
+  const safeInterval = Number.isFinite(intervalSeconds) && intervalSeconds > 0
+    ? intervalSeconds
+    : MAGAZINE_FEATURED_INTERVAL_DEFAULT_SECONDS;
+  setInterval(() => {
+    index = (index + 1) % posts.length;
+    featuredEl.innerHTML = renderMagazineFeaturedCard(posts[index]);
+  }, safeInterval * 1000);
 }
 
 async function loadMagazinePreview() {
@@ -148,7 +183,15 @@ async function loadMagazinePreview() {
     const otherCategories = categories.filter(c => c !== MAGAZINE_FEATURED_CATEGORY);
 
     const featuredPosts = await fetchMagazinePosts(MAGAZINE_FEATURED_CATEGORY);
-    featuredEl.innerHTML = renderMagazineFeaturedCard(featuredPosts[0]);
+    let featuredIntervalSeconds = MAGAZINE_FEATURED_INTERVAL_DEFAULT_SECONDS;
+    try {
+      const raw = await fetchAppSetting(MAGAZINE_FEATURED_INTERVAL_SETTING_KEY);
+      const parsed = raw !== null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed) && parsed > 0) featuredIntervalSeconds = parsed;
+    } catch (err) {
+      console.error('매거진 자동전환 간격 설정 로딩 실패(기본값 8초 사용):', err);
+    }
+    initMagazineFeaturedSlideshow(featuredEl, featuredPosts, featuredIntervalSeconds);
 
     if (otherCategories.length === 0) {
       othersEl.innerHTML = '';

@@ -10,6 +10,9 @@
   .field-hint { font-size:12.5px; color:var(--text-gray); margin-top:-8px; }
   .mg-filter-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
   .mg-filter-row select { padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-light); font-size:14px; }
+  .mg-settings-panel { margin:20px 0; padding:16px; border:1.5px solid var(--border-light); border-radius:10px; }
+  .mg-thumb-cell img { width:48px; height:48px; object-fit:cover; border-radius:6px; display:block; }
+  .mg-thumb-page-input { width:56px; padding:4px 6px; border-radius:6px; border:1.5px solid var(--border-light); }
 </style>
 </head>
 <body>
@@ -31,6 +34,17 @@
   <div id="adminContent" hidden>
     <a href="/pages/news-magazine.html" class="btn btn-ghost btn-sm">← 빛나는 매거진으로</a>
 
+    <div class="mg-settings-panel">
+      <p style="font-weight:700;margin-bottom:8px;">교회뉴스 카드 자동전환 간격</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="number" id="mg-interval-input" min="1" step="1" style="width:100px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border-light);">
+        <span>초</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="mg-interval-save">저장</button>
+        <span id="mg-interval-msg" style="font-size:12.5px;color:var(--text-gray);"></span>
+      </div>
+      <p class="field-hint">홈페이지 매거진 미리보기에서 교회뉴스 카테고리 글이 2건 이상일 때, 몇 초마다 다음 글로 자동 전환할지 설정합니다(기본 8초).</p>
+    </div>
+
     <form id="form-magazine" class="sermon-form" style="margin-top:20px;">
       <div class="sermon-form-row">
         <label>카테고리
@@ -48,6 +62,10 @@
         <input type="file" id="mg-file" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" required>
       </label>
       <p class="field-hint">PDF 또는 JPG 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다).</p>
+      <label>썸네일 페이지 (PDF만 해당)
+        <input type="number" id="mg-thumb-page" min="1" step="1" value="1">
+      </label>
+      <p class="field-hint">PDF에서 몇 번째 페이지를 미리보기 썸네일 이미지로 보여줄지 지정합니다(기본 1페이지 = 표지). 이미지(JPG) 파일에는 적용되지 않습니다.</p>
       <div class="sermon-form-actions">
         <button type="submit" class="btn btn-primary" id="mg-submit-btn">글 등록</button>
       </div>
@@ -66,7 +84,7 @@
     </div>
     <div class="sermon-table-wrap">
       <table class="sermon-table">
-        <thead><tr><th>제목</th><th>카테고리</th><th>파일형식</th><th>등록일</th><th>관리</th></tr></thead>
+        <thead><tr><th>제목</th><th>카테고리</th><th>파일형식</th><th>썸네일</th><th>등록일</th><th>관리</th></tr></thead>
         <tbody id="mg-tbody"></tbody>
       </table>
     </div>
@@ -79,11 +97,51 @@
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
 <script src="/magazine-data.js"></script>
+<script src="/settings-data.js"></script>
 <script src="/common.js"></script>
+<script type="module">
+// PDF 특정 페이지를 JPEG 썸네일 Blob으로 렌더링한다 — 관리자 브라우저에서 직접 실행한다
+// (서버 함수 없이 정적 사이트 구조를 유지하기 위한 선택. repo 전수 grep 결과 이 프로젝트에는
+// PDF 렌더링 라이브러리가 없어 pdf.js를 CDN(jsDelivr)으로 신규 도입했다 — 버전은
+// 6.2.108로 고정(pin)해 상류 변경으로 조용히 깨지는 것을 방지한다).
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.worker.min.mjs';
+
+window.renderPdfPageThumbnail = async function (fileOrArrayBuffer, pageNumber) {
+  const data = fileOrArrayBuffer instanceof Blob ? await fileOrArrayBuffer.arrayBuffer() : fileOrArrayBuffer;
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  // 관리자가 실제 페이지 수를 넘는 값을 입력해도 죽지 않고 마지막 페이지로 안전하게 보정한다.
+  const clampedPage = Math.min(Math.max(1, pageNumber || 1), pdf.numPages);
+  const page = await pdf.getPage(clampedPage);
+  const viewport = page.getViewport({ scale: 1.5 });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+};
+</script>
 <script>
 function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 const MAGAZINE_BUCKET = 'magazine-files';
 const MAGAZINE_ALLOWED_EXT = ['pdf', 'jpg', 'jpeg'];
+const MAGAZINE_INTERVAL_SETTING_KEY = 'magazine_featured_interval_seconds';
+const MAGAZINE_INTERVAL_DEFAULT_SECONDS = 8;
+
+// PDF 지정 페이지를 렌더링해 magazine-files 버킷에 업로드한다. 경로는 원본 파일 경로에서
+// 확장자만 -thumb.jpg로 바꾼 결정론적 이름이라 재생성 시 upsert로 같은 오브젝트를 덮어써
+// 고아 파일을 만들지 않는다(이 프로젝트가 과거 겪은 고아 파일 버그 재발 방지 — file_path
+// 컬럼 도입 이력 참고).
+async function generateAndUploadThumbnail(sourceBlobOrArrayBuffer, pageNumber, basePath) {
+  if (!window.renderPdfPageThumbnail) throw new Error('PDF 렌더링 모듈이 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
+  const blob = await window.renderPdfPageThumbnail(sourceBlobOrArrayBuffer, pageNumber);
+  const thumbPath = (basePath || `thumb-${Date.now()}`).replace(/\.[^.]+$/, '') + '-thumb.jpg';
+  const sb = requireSupabaseClient();
+  const { error: upErr } = await sb.storage.from(MAGAZINE_BUCKET).upload(thumbPath, blob, { upsert: true, contentType: 'image/jpeg' });
+  if (upErr) throw upErr;
+  const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(thumbPath);
+  return { thumbnail_url: pub.publicUrl, thumbnail_path: thumbPath };
+}
 
 let __mgPosts = [];
 let __mgFilterCategory = '';
@@ -110,6 +168,12 @@ async function refreshCategoryOptions() {
   filterSelect.value = categories.includes(current) ? current : '';
 }
 
+function magazineAdminThumbCell(p) {
+  if (p.file_type === 'image') return `<img src="${p.file_url}" alt="">`;
+  if (p.thumbnail_url) return `<img src="${p.thumbnail_url}" alt="">`;
+  return '<span style="font-size:20px;">📄</span>';
+}
+
 async function loadPostList() {
   __mgPosts = await fetchMagazinePosts(__mgFilterCategory || undefined);
   const tbody = document.getElementById('mg-tbody');
@@ -121,11 +185,70 @@ async function loadPostList() {
       <td>${esc(p.title)}</td>
       <td>${esc(p.category)}</td>
       <td>${p.file_type === 'pdf' ? 'PDF' : '이미지'}</td>
+      <td class="mg-thumb-cell">${magazineAdminThumbCell(p)}</td>
       <td>${(p.created_at || '').slice(0, 10)}</td>
-      <td><button type="button" class="btn btn-ghost btn-sm" data-delete="${p.id}">삭제</button></td>
+      <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        ${p.file_type === 'pdf' ? `
+          <input type="number" class="mg-thumb-page-input" min="1" step="1" value="${p.thumb_page || 1}" data-thumb-page-input="${p.id}">
+          <button type="button" class="btn btn-ghost btn-sm" data-regen="${p.id}">썸네일 재생성</button>
+        ` : ''}
+        <button type="button" class="btn btn-ghost btn-sm" data-delete="${p.id}">삭제</button>
+      </td>
     </tr>`).join('');
   tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removePost(btn.dataset.delete)));
+  tbody.querySelectorAll('[data-regen]').forEach(btn => btn.addEventListener('click', () => regenerateThumbnail(btn.dataset.regen)));
 }
+
+async function regenerateThumbnail(id) {
+  const post = __mgPosts.find(p => p.id === id);
+  if (!post || post.file_type !== 'pdf') return;
+  const pageInput = document.querySelector(`[data-thumb-page-input="${id}"]`);
+  const pageNum = Math.max(1, parseInt(pageInput.value, 10) || 1);
+  const btn = document.querySelector(`[data-regen="${id}"]`);
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '생성 중…';
+  try {
+    const resp = await fetch(post.file_url);
+    if (!resp.ok) throw new Error('원본 PDF를 불러오지 못했습니다 (HTTP ' + resp.status + ')');
+    const arrayBuffer = await resp.arrayBuffer();
+    const basePath = post.file_path || `magazine-${id}.pdf`;
+    const thumbInfo = await generateAndUploadThumbnail(arrayBuffer, pageNum, basePath);
+    await updateMagazinePost(id, { thumb_page: pageNum, thumbnail_url: thumbInfo.thumbnail_url, thumbnail_path: thumbInfo.thumbnail_path });
+    await loadPostList();
+  } catch (err) {
+    alert('썸네일 재생성 중 오류가 발생했습니다: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+async function loadIntervalSetting() {
+  const input = document.getElementById('mg-interval-input');
+  try {
+    const raw = await fetchAppSetting(MAGAZINE_INTERVAL_SETTING_KEY);
+    const parsed = raw !== null ? Number(raw) : NaN;
+    input.value = Number.isFinite(parsed) && parsed > 0 ? parsed : MAGAZINE_INTERVAL_DEFAULT_SECONDS;
+  } catch (err) {
+    input.value = MAGAZINE_INTERVAL_DEFAULT_SECONDS;
+  }
+}
+
+document.getElementById('mg-interval-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('mg-interval-msg');
+  const value = Number(document.getElementById('mg-interval-input').value);
+  msgEl.style.color = 'var(--text-gray)';
+  if (!Number.isFinite(value) || value <= 0) {
+    msgEl.textContent = '1 이상의 숫자를 입력해주세요.';
+    return;
+  }
+  try {
+    await upsertAppSetting(MAGAZINE_INTERVAL_SETTING_KEY, String(value));
+    msgEl.textContent = '저장되었습니다.';
+  } catch (err) {
+    msgEl.textContent = '저장 실패: ' + err.message;
+  }
+});
 
 async function removePost(id) {
   const post = __mgPosts.find(p => p.id === id);
@@ -175,13 +298,32 @@ document.getElementById('form-magazine').addEventListener('submit', async (e) =>
     const { error: uploadError } = await sb.storage.from(MAGAZINE_BUCKET).upload(path, file, { upsert: false });
     if (uploadError) throw uploadError;
     const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(path);
+    const thumbPage = Math.max(1, parseInt(document.getElementById('mg-thumb-page').value, 10) || 1);
 
-    await createMagazinePost({
+    const created = await createMagazinePost({
       category, title, body: body || null,
       file_url: pub.publicUrl, file_path: path, file_type: fileType,
+      thumb_page: thumbPage,
     });
 
+    if (fileType === 'pdf') {
+      try {
+        const thumbInfo = await generateAndUploadThumbnail(file, thumbPage, path);
+        await updateMagazinePost(created.id, {
+          thumb_page: thumbPage,
+          thumbnail_url: thumbInfo.thumbnail_url,
+          thumbnail_path: thumbInfo.thumbnail_path,
+        });
+      } catch (thumbErr) {
+        // 글 자체는 이미 정상 등록됐다 — 썸네일만 실패한 것이므로 등록을 되돌리지 않고
+        // 기존 📄 아이콘 폴백으로 보이게 두고 관리자에게 알린다(목록의 재생성 버튼으로 재시도 가능).
+        console.error('썸네일 생성 실패(글은 정상 등록됨):', thumbErr);
+        alert('글은 등록되었지만 썸네일 생성에 실패했습니다. 목록에서 "썸네일 재생성" 버튼으로 다시 시도해주세요: ' + thumbErr.message);
+      }
+    }
+
     document.getElementById('form-magazine').reset();
+    document.getElementById('mg-thumb-page').value = 1;
     await loadPostList();
     await refreshCategoryOptions();
   } catch (err) {
@@ -201,6 +343,7 @@ async function initAdminMagazinePage() {
   }
   document.getElementById('adminContent').hidden = false;
   try {
+    await loadIntervalSetting();
     await refreshCategoryOptions();
     await loadPostList();
   } catch (err) {
