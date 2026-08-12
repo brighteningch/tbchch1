@@ -23,8 +23,12 @@ as $$
 $$;
 
 -- 회원가입 직후 본인 프로필 생성 허용
+-- ★보안 핵심: is_admin은 반드시 false여야만 본인 프로필 생성을 허용한다. 이 조건이 없으면
+-- 누구나 회원가입 직후 profiles insert 요청 본문에 "is_admin": true를 직접 포함시켜
+-- 스스로를 관리자로 만들 수 있다(실제 확인된 취약점 — 2026-08-12 수정). 관리자는 이 정책이
+-- 아니라 오너가 SQL Editor에서 직접 부여한다.
 create policy "insert own profile" on profiles
-  for insert with check (auth.uid() = id);
+  for insert with check (auth.uid() = id and is_admin = false);
 
 -- 본인 프로필 조회 허용
 create policy "select own profile" on profiles

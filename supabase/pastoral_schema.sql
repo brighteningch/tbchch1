@@ -5,6 +5,14 @@
 -- 0) profiles에 재적관리 전용 접근 플래그 추가 (기존 is_admin과 별개 — 목회자 두 분만)
 alter table profiles add column if not exists is_pastoral_admin boolean not null default false;
 
+-- 0-1) ★보안 수정(2026-08-12): supabase-schema.sql의 "insert own profile" 정책은 is_admin=false만
+-- 체크하고 방금 추가한 is_pastoral_admin은 체크하지 않는다 — 그대로 두면 누구나 회원가입 직후
+-- profiles insert에 "is_pastoral_admin": true를 직접 포함시켜 재적관리(전 성도 개인정보) 접근권을
+-- 스스로 부여할 수 있다(실제 확인된 취약점). 정책을 다시 만들어 이 컬럼도 막는다.
+drop policy if exists "insert own profile" on profiles;
+create policy "insert own profile" on profiles
+  for insert with check (auth.uid() = id and is_admin = false and is_pastoral_admin = false);
+
 -- 1) 가정교회(소그룹)
 create table if not exists cell_groups (
   id uuid primary key default gen_random_uuid(),
