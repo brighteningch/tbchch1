@@ -246,6 +246,21 @@ function initMobileNav() {
   });
 }
 
+// #instagramLink는 nav_menu 동적 렌더링(applyDynamicNavMenu)이 #nav를 통째로 다시 그릴 때도
+// 매번 새로 생성되는 요소라, "site.json 로드 완료"와 "nav 다시 그리기 완료" 중 어느 쪽이 먼저
+// 끝나든 항상 최신 상태로 맞춰지도록 별도 함수로 뽑아 양쪽에서 호출한다(window.__siteData가
+// 아직 없으면 아무 것도 하지 않고 조용히 넘어간다 — 나중에 site.json이 로드되면 그때 다시 불린다).
+function applyInstagramLinkFromSiteData() {
+  const igLink = document.getElementById('instagramLink');
+  if (!igLink || !window.__siteData) return;
+  if (window.__siteData.contact && window.__siteData.contact.instagram_url) {
+    igLink.href = window.__siteData.contact.instagram_url;
+    igLink.style.display = '';
+  } else {
+    igLink.style.display = 'none';
+  }
+}
+
 function loadSiteData(callback) {
   fetch('/content/site.json')
     .then(res => res.json())
@@ -254,17 +269,70 @@ function loadSiteData(callback) {
       applySiteFont(data);
       applyBindings(document, data);
       applySectionBackgrounds(document, data);
-      if (data.contact && data.contact.instagram_url) {
-        const igLink = document.getElementById('instagramLink');
-        if (igLink) { igLink.href = data.contact.instagram_url; igLink.style.display = ''; }
-      } else {
-        const igLink = document.getElementById('instagramLink');
-        if (igLink) igLink.style.display = 'none';
-      }
+      applyInstagramLinkFromSiteData();
       if (callback) callback(data);
       document.dispatchEvent(new CustomEvent('sitedata:loaded', { detail: data }));
     })
     .catch(err => console.error('site.json 로드 실패:', err));
+}
+
+function escNav(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+// app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
+// 이 검사를 통과 못하면 applyDynamicNavMenu는 아무것도 하지 않고 header.html의 하드코딩된
+// 메뉴를 그대로 둔다 — "값이 없거나 파싱 실패해도 사이트가 절대 깨지면 안 된다"는 요구사항의
+// 핵심 방어선이다.
+function isValidNavMenu(data) {
+  return !!data && Array.isArray(data.groups) && data.groups.length > 0 &&
+    data.groups.every(g => g && typeof g.label === 'string' && Array.isArray(g.items) &&
+      g.items.every(it => it && typeof it.label === 'string' && typeof it.href === 'string'));
+}
+
+// nav_menu 데이터(그룹 배열)로 #nav 안의 메가메뉴 마크업을 header.html의 정적 버전과
+// 동일한 클래스 구조(mm-item/mm-trigger/mm-chevron/mm-panel)로 다시 만든다.
+function buildNavMenuHtml(navMenu) {
+  return navMenu.groups.map((g, i) => {
+    const itemsHtml = (g.items || [])
+      .map(it => `<a href="${escNav(it.href)}">${escNav(it.label)}</a>`)
+      .join('');
+    // ★교회소식(고정 5번째 그룹, index 4)의 인스타그램 링크는 관리자 편집 대상이 아니다
+    // (site.json의 contact.instagram_url이 채워주는 별도 동적 링크라 이 기능 범위 밖) —
+    // 그룹 내용과 무관하게 그 그룹의 패널 맨 끝에 항상 고정으로 붙인다.
+    const instagramHtml = i === 4
+      ? '<a href="#" id="instagramLink" target="_blank" rel="noopener">공식 인스타그램 ↗</a>'
+      : '';
+    return `<div class="mm-item">
+        <button class="mm-trigger">${escNav(g.label)}<svg class="mm-chevron" width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+        <div class="mm-panel">${itemsHtml}${instagramHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+// 관리자가 pages/admin-nav-menu.html에서 저장한 메뉴가 있으면 header.html의 하드코딩된
+// 메뉴를 그것으로 다시 그린다. 실패하는 모든 경우(Supabase 미설정·값 없음·파싱 실패·형식
+// 이상)에는 조용히 아무것도 하지 않는다 — 이미 화면에 떠 있는 정적 메뉴가 그대로 유지되므로
+// 이 함수가 실패해도 사이트는 절대 깨지지 않는다. loadSiteData와 병렬로 실행되며 다른
+// 렌더링을 기다리게 하지 않는다(await하지 않음).
+function applyDynamicNavMenu() {
+  const sb = getSupabaseClient();
+  if (!sb) return;
+  sb.from('app_settings').select('value').eq('key', 'nav_menu').maybeSingle()
+    .then(({ data, error }) => {
+      if (error || !data || !data.value) return;
+      let parsed;
+      try {
+        parsed = JSON.parse(data.value);
+      } catch {
+        return;
+      }
+      if (!isValidNavMenu(parsed)) return;
+      const nav = document.getElementById('nav');
+      if (!nav) return;
+      nav.innerHTML = buildNavMenuHtml(parsed);
+      initMegaMenu(); // #nav 내용이 통째로 바뀌었으므로 새 .mm-item에 클릭 핸들러를 다시 건다
+      applyInstagramLinkFromSiteData(); // site.json이 이미 로드돼 있었다면 새 인스타그램 링크에도 반영
+    })
+    .catch(() => {});
 }
 
 function injectPartials(callback) {
@@ -279,6 +347,7 @@ function injectPartials(callback) {
     initMegaMenu();
     initMobileNav();
     initPhotoLightbox();
+    applyDynamicNavMenu();
     if (window.renderMemberAuthArea) renderMemberAuthArea();
     if (callback) callback();
   });
