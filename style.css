@@ -273,13 +273,29 @@ body {
 .magazine-post-card--featured .magazine-post-title { font-size: 19px; padding: 20px 20px 0; margin-bottom: 8px; }
 .magazine-post-card--featured .magazine-post-date { padding: 0 20px; }
 .magazine-post-card--featured .magazine-post-badge { position: absolute; top: 14px; right: 14px; }
+.magazine-home-featured-cat {
+  position: absolute; top: 14px; left: 14px; z-index: 2;
+  background: rgba(15,40,70,0.85); color: #fff; font-size: 12px; font-weight: 700;
+  padding: 5px 12px; border-radius: 20px; letter-spacing: 0.2px;
+}
+
+/* ★2026-08-12(3차): 오너 지적으로 56px 아이콘형에서 상단 전체너비 썸네일형으로
+   교체 — featured 카드와 같은 구조(상단 이미지, 카테고리는 이미지 위 오버레이 배지)라
+   실제로 내용을 알아볼 수 있는 크기가 된다. */
 .magazine-home-others { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.magazine-home-other-item { display: flex; flex-direction: column; gap: 6px; }
-.magazine-home-other-cat { font-size: 12px; font-weight: 700; color: var(--navy); letter-spacing: 0.2px; }
-.magazine-home-other-thumb { width: 56px; height: 56px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: var(--bg-cool); }
+.magazine-post-card--other {
+  flex-direction: column; align-items: stretch; justify-content: flex-start;
+  text-align: left; padding: 0; overflow: hidden; position: relative;
+}
+.magazine-home-other-cat {
+  position: absolute; top: 10px; left: 10px; z-index: 2;
+  background: rgba(15,40,70,0.85); color: #fff; font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 20px; letter-spacing: 0.2px;
+}
+.magazine-home-other-thumb { width: 100%; aspect-ratio: 16 / 10; background: var(--bg-cool); overflow: hidden; }
 .magazine-home-other-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.magazine-home-other-thumb--pdf { display: flex; align-items: center; justify-content: center; font-size: 24px; }
-.magazine-home-other-body { flex: 1; min-width: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.magazine-home-other-thumb--pdf { display: flex; align-items: center; justify-content: center; font-size: 40px; }
+.magazine-post-card--other .magazine-home-other-body { padding: 14px 16px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 @media (max-width: 820px) {
   .magazine-home-layout { grid-template-columns: 1fr; }
 }

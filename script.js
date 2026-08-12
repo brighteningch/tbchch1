@@ -132,22 +132,25 @@ function renderMagazineFeaturedCard(post) {
   if (!post) return '<p class="magazine-empty">아직 등록된 글이 없습니다.</p>';
   return `
     <a class="magazine-post-card magazine-post-card--featured" href="${post.file_url}" target="_blank" rel="noopener">
+      <span class="magazine-home-featured-cat">${escMagazine(post.category)}</span>
       ${magazineThumbHtml(post, 'magazine-home-featured-thumb')}
       ${renderMagazinePostBody(post)}
     </a>`;
 }
 
+// ★2026-08-12(3차): 오너가 "우측 다른 글 미리보기가 너무 작다"고 지적 — 기존
+// 56px 정사각 아이콘 옆에 텍스트를 두는 방식에서, featured 카드처럼 상단 전체너비
+// 썸네일(카테고리 라벨은 썸네일 위 좌측 오버레이) + 하단 텍스트 방식으로 바꿔
+// 실제로 내용이 보이는 크기를 확보한다.
 function renderMagazineOtherItem(category, post) {
   return `
-    <div class="magazine-home-other-item">
-      <p class="magazine-home-other-cat">${escMagazine(category)}</p>
-      <a class="magazine-post-card" href="${post.file_url}" target="_blank" rel="noopener">
-        ${magazineThumbHtml(post, 'magazine-home-other-thumb')}
-        <div class="magazine-home-other-body">
-          ${renderMagazinePostBody(post)}
-        </div>
-      </a>
-    </div>`;
+    <a class="magazine-post-card magazine-post-card--other" href="${post.file_url}" target="_blank" rel="noopener">
+      <span class="magazine-home-other-cat">${escMagazine(category)}</span>
+      ${magazineThumbHtml(post, 'magazine-home-other-thumb')}
+      <div class="magazine-home-other-body">
+        ${renderMagazinePostBody(post)}
+      </div>
+    </a>`;
 }
 
 // 교회뉴스(피처드) 카드는 글이 여러 건이면 설정된 간격(초)마다 다음 글로 자동 전환된다.
