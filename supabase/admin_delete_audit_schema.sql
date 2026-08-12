@@ -52,9 +52,14 @@ create policy "admin_delete_audit_log admin select" on admin_delete_audit_log
 -- pending 행까지 잘못 success로 덮어써버리므로 위험하다. 신규 설치(빈 테이블)에는 애초에 이
 -- 문제가 발생하지 않는다.
 --
--- ★운영 절차(reviewer-codex 지적 — 장기간 pending으로 남은 행 조사법): status='pending'인 행이
--- 오래 남아있다면(정상 흐름은 수 초 내 success/failed로 update됨) index.ts 6)/7)단계의 update가
--- 실패했다는 뜻이다 — 삭제 시도 자체(성공/실패)는 이미 확정됐지만 그 결과가 기록만 안 된 상태다.
--- 실제 결과를 알아내려면 target_id로 auth.users를 직접 조회한다: 그 id가 더 이상 존재하지 않으면
--- 삭제는 성공한 것이고(수동으로 status='success'로 고칠 수 있다), 여전히 존재하면 삭제가 실패한
--- 것이다(Supabase Edge Function 로그에서 같은 시각의 console.error로 원인 확인).
+-- ★운영 절차(reviewer-codex 지적 — 장기간 pending으로 남은 행 조사법 · 2026-08-12 문구 정정):
+-- status='pending'인 행이 오래 남아있다면(정상 흐름은 수 초 내 success/failed로 update됨) 결과가
+-- "미확정"이라는 뜻이다 — ★"삭제 시도는 이미 확정됐고 기록만 안 됐다"고 단정하면 안 된다
+-- (reviewer-codex 재지적, 최초 버전 문구가 부정확했음): pending insert가 성공한 뒤 deleteUser를
+-- 호출하기 *전에* 함수 인스턴스가 중단(타임아웃·크래시·재배포 등)되면 deleteUser 자체가 아예
+-- 호출되지 않아 삭제가 전혀 시도되지 않았을 수도 있고, 반대로 deleteUser는 이미 끝났는데(성공
+-- 또는 실패) 그 다음 update만 실패했을 수도 있다 — 이 표만 봐서는 둘을 구분할 수 없다.
+-- 그러니 실제 상태는 반드시 target_id로 auth.users를 직접 조회해 확인한다: 그 id가 더 이상
+-- 존재하지 않으면 삭제가 실제로 일어난 것이고(수동으로 status='success'로 고칠 수 있다), 여전히
+-- 존재하면 삭제가 시도되지 않았거나 실패한 것이다(같은 시각의 Supabase Edge Function 로그의
+-- console.error로 어느 쪽인지 추가 확인).
