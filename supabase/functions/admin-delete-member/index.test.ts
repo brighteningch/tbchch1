@@ -2,11 +2,20 @@
 // ★JWT 자체의 검증(서명 확인·만료 확인 등)은 배포된 플랫폼이 handler 실행 전에 수행하는
 // 별도 레이어라(공식문서: "the platform validates the JWT before your handler runs")
 // 로컬에서 배포 없이는 그 레이어까지 재현할 수 없다 — 이 테스트는 "이미 검증된 사용자가
-// 관리자 권한을 실제로 갖고 있는지, 자기 자신을 지우려는 건 아닌지, 그리고 삭제가 실제로
-// 일어났을 때 감사로그가 정확히 남는지(혹은 실패해도 삭제 응답이 흔들리지 않는지)"부터의
-// 서버측 로직을 검증 대상으로 삼는다.
+// 관리자 권한을 실제로 갖고 있는지, 자기 자신을 지우려는 건 아닌지, 그리고 감사로그가
+// pending→success/failed 순서로 정확히 남는지(혹은 pending insert 자체가 실패하면 삭제를
+// 아예 진행하지 않는지)"부터의 서버측 로직을 검증 대상으로 삼는다.
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { handleRequest, type HandlerCtx } from "./index.ts";
+
+interface AuditRow {
+  id: string;
+  actor_id: string;
+  target_id: string;
+  target_name: string | null;
+  status: string;
+  error_message?: string | null;
+}
 
 function makeCtx(opts: {
   userId: string | null;
@@ -15,57 +24,48 @@ function makeCtx(opts: {
   targetName?: string | null;
   targetNameQueryError?: { message: string } | null;
   deleteError?: { message: string } | null;
-  auditError?: { message: string } | null;
-  auditThrows?: boolean;
+  auditInsertError?: { message: string } | null;
+  auditUpdateError?: { message: string } | null;
 }): HandlerCtx & {
   deleteCallCount: number;
   lastDeletedUserId: string | null;
   auditInsertCallCount: number;
-  lastAuditInsert: Record<string, unknown> | null;
+  auditUpdateCallCount: number;
+  auditRows: AuditRow[];
 } {
   const state = {
     deleteCallCount: 0,
     lastDeletedUserId: null as string | null,
     auditInsertCallCount: 0,
-    lastAuditInsert: null as Record<string, unknown> | null,
+    auditUpdateCallCount: 0,
+    auditRows: [] as AuditRow[],
+    nextAuditId: 1,
   };
+
   const ctx: HandlerCtx & {
     deleteCallCount: number;
     lastDeletedUserId: string | null;
     auditInsertCallCount: number;
-    lastAuditInsert: Record<string, unknown> | null;
+    auditUpdateCallCount: number;
+    auditRows: AuditRow[];
   } = {
     userClaims: opts.userId ? { id: opts.userId } : null,
     supabase: {
       from: (table: string) => {
-        if (table !== "profiles") throw new Error(`예상치 못한 테이블 조회: ${table}`);
+        if (table !== "profiles") throw new Error(`예상치 못한 테이블 조회(ctx.supabase): ${table}`);
         return {
           select: (cols: string) => ({
             eq: (col: string, val: string) => ({
               single: async () => {
-                if (cols === "is_admin") {
-                  // 호출자 본인 관리자여부 조회 — 반드시 호출자 자신의 id로만 조회해야 한다
-                  // (다른 사람의 is_admin을 훔쳐볼 수 있으면 심각한 취약점이므로 이 불변식을
-                  // 목으로도 강제한다).
-                  if (col !== "id" || val !== opts.userId) {
-                    throw new Error("호출자 id가 아닌 다른 id로 is_admin 조회 시도됨(위험)");
-                  }
-                  if (opts.profileQueryError) {
-                    return { data: null, error: opts.profileQueryError };
-                  }
-                  if (opts.isAdmin === null) {
-                    return { data: null, error: null }; // 프로필 없음
-                  }
-                  return { data: { is_admin: opts.isAdmin }, error: null };
+                if (cols !== "is_admin") throw new Error(`예상치 못한 select 컬럼(ctx.supabase): ${cols}`);
+                // 호출자 본인 관리자여부 조회 — 반드시 호출자 자신의 id로만 조회해야 한다
+                // (다른 사람의 is_admin을 훔쳐볼 수 있으면 심각한 취약점이므로 목으로도 강제한다).
+                if (col !== "id" || val !== opts.userId) {
+                  throw new Error("호출자 id가 아닌 다른 id로 is_admin 조회 시도됨(위험)");
                 }
-                if (cols === "name") {
-                  // 감사로그용 대상 회원 이름 조회 — 대상 id(호출자와 다를 수 있음)로 조회한다.
-                  if (opts.targetNameQueryError) {
-                    return { data: null, error: opts.targetNameQueryError };
-                  }
-                  return { data: { name: opts.targetName ?? null }, error: null };
-                }
-                throw new Error(`예상치 못한 select 컬럼: ${cols}`);
+                if (opts.profileQueryError) return { data: null, error: opts.profileQueryError };
+                if (opts.isAdmin === null) return { data: null, error: null }; // 프로필 없음
+                return { data: { is_admin: opts.isAdmin }, error: null };
               },
             }),
           }),
@@ -84,18 +84,54 @@ function makeCtx(opts: {
         },
       },
       from: (table: string) => {
-        if (table !== "admin_delete_audit_log") {
-          throw new Error(`예상치 못한 테이블 조회(supabaseAdmin): ${table}`);
+        if (table === "profiles") {
+          return {
+            select: (cols: string) => ({
+              eq: (_col: string, _val: string) => ({
+                single: async () => {
+                  if (cols !== "name") throw new Error(`예상치 못한 select 컬럼(profiles/admin): ${cols}`);
+                  if (opts.targetNameQueryError) return { data: null, error: opts.targetNameQueryError };
+                  return { data: { name: opts.targetName ?? null }, error: null };
+                },
+              }),
+            }),
+          };
         }
-        return {
-          insert: async (row: Record<string, unknown>) => {
-            state.auditInsertCallCount++;
-            state.lastAuditInsert = row;
-            if (opts.auditThrows) throw new Error("감사로그 insert 중 네트워크 예외(테스트용)");
-            if (opts.auditError) return { data: null, error: opts.auditError };
-            return { data: row, error: null };
-          },
-        };
+        if (table === "admin_delete_audit_log") {
+          return {
+            insert: (row: Record<string, unknown>) => ({
+              select: (_cols: string) => ({
+                single: async () => {
+                  state.auditInsertCallCount++;
+                  if (opts.auditInsertError) return { data: null, error: opts.auditInsertError };
+                  const id = `audit-row-${state.nextAuditId++}`;
+                  const stored: AuditRow = {
+                    id,
+                    actor_id: row.actor_id as string,
+                    target_id: row.target_id as string,
+                    target_name: (row.target_name as string) ?? null,
+                    status: row.status as string,
+                  };
+                  state.auditRows.push(stored);
+                  return { data: { id }, error: null };
+                },
+              }),
+            }),
+            update: (patch: Record<string, unknown>) => ({
+              eq: async (_col: string, val: string) => {
+                state.auditUpdateCallCount++;
+                if (opts.auditUpdateError) return { error: opts.auditUpdateError };
+                const row = state.auditRows.find((r) => r.id === val);
+                if (row) {
+                  row.status = patch.status as string;
+                  if ("error_message" in patch) row.error_message = patch.error_message as string;
+                }
+                return { error: null };
+              },
+            }),
+          };
+        }
+        throw new Error(`예상치 못한 테이블 조회(supabaseAdmin): ${table}`);
       },
     },
     get deleteCallCount() {
@@ -107,8 +143,11 @@ function makeCtx(opts: {
     get auditInsertCallCount() {
       return state.auditInsertCallCount;
     },
-    get lastAuditInsert() {
-      return state.lastAuditInsert;
+    get auditUpdateCallCount() {
+      return state.auditUpdateCallCount;
+    },
+    get auditRows() {
+      return state.auditRows;
     },
   };
   return ctx;
@@ -121,8 +160,8 @@ function makeReq(body: unknown): Request {
   });
 }
 
-// ---------- (a) 정상 관리자가 다른 회원을 삭제 → 성공 + 감사로그 정확히 기록 ----------
-Deno.test("관리자가 다른 회원 계정 삭제를 요청하면 성공하고 그 대상 id로 deleteUser가 정확히 1회 호출된다", async () => {
+// ---------- (a) 정상 관리자가 다른 회원을 삭제 → 성공 + 감사로그 pending→success ----------
+Deno.test("관리자가 다른 회원 계정 삭제를 요청하면 성공하고 deleteUser가 정확히 1회 호출된다", async () => {
   const ctx = makeCtx({ userId: "admin-uuid-1", isAdmin: true, targetName: "홍길동" });
   const res = await handleRequest(makeReq({ userId: "target-uuid-9" }), ctx);
   assertEquals(res.status, 200);
@@ -132,16 +171,17 @@ Deno.test("관리자가 다른 회원 계정 삭제를 요청하면 성공하고
   assertEquals(ctx.lastDeletedUserId, "target-uuid-9");
 });
 
-Deno.test("삭제 성공 시 감사로그(actor_id/target_id/target_name)가 정확히 1회 insert된다", async () => {
+Deno.test("삭제 성공 시 감사로그가 pending으로 먼저 insert된 뒤 success로 update된다(actor/target/name 정확)", async () => {
   const ctx = makeCtx({ userId: "admin-uuid-1", isAdmin: true, targetName: "홍길동" });
   const res = await handleRequest(makeReq({ userId: "target-uuid-9" }), ctx);
   assertEquals(res.status, 200);
   assertEquals(ctx.auditInsertCallCount, 1);
-  assertEquals(ctx.lastAuditInsert, {
-    actor_id: "admin-uuid-1",
-    target_id: "target-uuid-9",
-    target_name: "홍길동",
-  });
+  assertEquals(ctx.auditUpdateCallCount, 1);
+  assertEquals(ctx.auditRows.length, 1);
+  assertEquals(ctx.auditRows[0].actor_id, "admin-uuid-1");
+  assertEquals(ctx.auditRows[0].target_id, "target-uuid-9");
+  assertEquals(ctx.auditRows[0].target_name, "홍길동");
+  assertEquals(ctx.auditRows[0].status, "success");
 });
 
 Deno.test("대상 이름 조회가 실패해도(예: 이미 지워진 프로필) 삭제는 진행되고 target_name은 null로 기록된다", async () => {
@@ -153,38 +193,74 @@ Deno.test("대상 이름 조회가 실패해도(예: 이미 지워진 프로필)
   const res = await handleRequest(makeReq({ userId: "target-uuid-9" }), ctx);
   assertEquals(res.status, 200);
   assertEquals(ctx.deleteCallCount, 1);
-  assertEquals(ctx.auditInsertCallCount, 1);
-  assertEquals(ctx.lastAuditInsert?.target_name, null);
+  assertEquals(ctx.auditRows[0].target_name, null);
 });
 
-// ---------- (fail-open) 감사로그 insert 실패/예외가 삭제 성공 응답을 흔들지 않는다 ----------
-Deno.test("감사로그 insert가 실패해도(fail-open) 삭제는 이미 완료됐으므로 응답은 success:true를 유지한다", async () => {
+// ---------- (핵심) 감사로그 pending insert 실패 시 삭제 자체를 진행하지 않는다(fail-closed) ----------
+Deno.test("감사로그 pending insert가 실패하면 삭제를 아예 시도하지 않고(fail-closed) 500을 반환한다", async () => {
   const ctx = makeCtx({
     userId: "admin-uuid-1",
     isAdmin: true,
     targetName: "홍길동",
-    auditError: { message: "insert denied" },
+    auditInsertError: { message: "insert denied" },
+  });
+  const res = await handleRequest(makeReq({ userId: "target-uuid-9" }), ctx);
+  assertEquals(res.status, 500);
+  const json = await res.json();
+  assertEquals(json.success, undefined);
+  // "감사행 없는 영구삭제"가 구조적으로 불가능해야 한다 — deleteUser가 아예 호출되지 않는다.
+  assertEquals(ctx.deleteCallCount, 0);
+});
+
+// ---------- 삭제 실패 시 감사로그가 failed로 update된다 ----------
+Deno.test("deleteUser가 실패하면 감사로그가 failed로 update되고(error_message 포함) 클라이언트에는 일반화된 메시지만 간다", async () => {
+  const ctx = makeCtx({
+    userId: "admin-uuid-1",
+    isAdmin: true,
+    targetName: "홍길동",
+    deleteError: { message: "internal detail XYZ-123" },
+  });
+  const res = await handleRequest(makeReq({ userId: "target-uuid-9" }), ctx);
+  assertEquals(res.status, 500);
+  const json = await res.json();
+  assertEquals(json.error.includes("XYZ-123"), false);
+  assertStringIncludes(json.error, "다시 시도");
+  assertEquals(ctx.auditRows[0].status, "failed");
+  assertEquals(ctx.auditRows[0].error_message, "internal detail XYZ-123");
+  // pending insert는 됐었으니 1회, 그 뒤 failed로 update도 1회.
+  assertEquals(ctx.auditInsertCallCount, 1);
+  assertEquals(ctx.auditUpdateCallCount, 1);
+});
+
+// ---------- (fail-open) 결과 update 실패/예외가 이미 확정된 삭제 결과 응답을 흔들지 않는다 ----------
+Deno.test("성공 후 감사로그 update가 실패해도(fail-open) 삭제는 이미 완료됐으므로 응답은 success:true를 유지한다", async () => {
+  const ctx = makeCtx({
+    userId: "admin-uuid-1",
+    isAdmin: true,
+    targetName: "홍길동",
+    auditUpdateError: { message: "update denied" },
   });
   const res = await handleRequest(makeReq({ userId: "target-uuid-9" }), ctx);
   assertEquals(res.status, 200);
   const json = await res.json();
   assertEquals(json.success, true);
   assertEquals(ctx.deleteCallCount, 1);
-  assertEquals(ctx.auditInsertCallCount, 1);
+  // update는 시도됐지만(실패) pending 행 자체는 이미 insert돼 있었다.
+  assertEquals(ctx.auditRows[0].status, "pending");
 });
 
-Deno.test("감사로그 insert 중 예외가 발생해도(fail-open) 응답은 success:true를 유지한다", async () => {
+Deno.test("실패 후 감사로그 update가 실패해도(fail-open) 클라이언트 응답(500·일반화 메시지)은 그대로다", async () => {
   const ctx = makeCtx({
     userId: "admin-uuid-1",
     isAdmin: true,
     targetName: "홍길동",
-    auditThrows: true,
+    deleteError: { message: "delete boom" },
+    auditUpdateError: { message: "update denied too" },
   });
   const res = await handleRequest(makeReq({ userId: "target-uuid-9" }), ctx);
-  assertEquals(res.status, 200);
+  assertEquals(res.status, 500);
   const json = await res.json();
-  assertEquals(json.success, true);
-  assertEquals(ctx.deleteCallCount, 1);
+  assertEquals(json.error.includes("delete boom"), false);
 });
 
 // ---------- (b) 로그인했지만 is_admin=false인 일반 회원이 호출 → 거부, 삭제·감사로그 모두 미도달 ----------
@@ -253,25 +329,5 @@ Deno.test("관리자가 자기 자신의 userId로 호출하면 서버가 거부
   assertEquals(json.success, undefined);
   assertEquals(typeof json.error, "string");
   assertEquals(ctx.deleteCallCount, 0);
-  assertEquals(ctx.auditInsertCallCount, 0);
-});
-
-// ---------- Admin API 실패 처리 ----------
-Deno.test("auth.admin.deleteUser가 실패하면 500과 일반화된 에러 메시지를 반환하고(상세 메시지 비노출) 감사로그도 남기지 않는다", async () => {
-  const ctx = makeCtx({
-    userId: "admin-uuid-1",
-    isAdmin: true,
-    targetName: "홍길동",
-    deleteError: { message: "user not found in internal system XYZ-123" },
-  });
-  const res = await handleRequest(makeReq({ userId: "nonexistent-uuid" }), ctx);
-  assertEquals(res.status, 500);
-  const json = await res.json();
-  assertEquals(json.success, undefined);
-  // ★상세 내부 에러 메시지가 클라이언트 응답에 그대로 노출되면 안 된다(reviewer-codex 지적).
-  assertEquals(typeof json.error, "string");
-  assertEquals(json.error.includes("XYZ-123"), false);
-  assertStringIncludes(json.error, "다시 시도");
-  // 삭제 자체가 실패했으므로 감사로그(성공 이벤트 기록)는 남기지 않는다.
   assertEquals(ctx.auditInsertCallCount, 0);
 });

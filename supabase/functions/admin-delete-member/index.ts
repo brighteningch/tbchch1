@@ -34,17 +34,23 @@
 // ★감사 로그(reviewer-codex 보안검토 REVISE 반영, 2026-08-12): 계정 영구삭제는 되돌릴 수 없는데
 // 누가/누구를/언제 지웠는지 기록이 없으면 오삭제나 탈취된 관리자 세션 악용을 사후에 추적할 방법이
 // 없다. supabase/admin_delete_audit_schema.sql의 admin_delete_audit_log에 actor_id/target_id/
-// target_name/created_at을 남긴다. target_name은 profiles 행이 삭제로 사라지기 전에 미리 조회해
-// 담아둔다(삭제 후에는 다시 조회할 수 없으므로).
+// target_name/status/error_message/created_at을 남긴다. target_name은 profiles 행이 삭제로
+// 사라지기 전에 미리 조회해 담아둔다(삭제 후에는 다시 조회할 수 없으므로) — 이 조회는
+// ctx.supabaseAdmin(service_role)으로 한다. ctx.supabase(호출자 RLS 스코프)로도 "admins select
+// all" 정책 덕에 동작은 하지만, 그 의존관계를 코드만 보고 파악하기 어렵다는 지적(reviewer-codex
+// 2차 검토)을 반영해 아예 RLS 추론이 필요 없는 service_role 조회로 바꿨다.
 //
-// ★운영계약(fail-open, 의도적 선택): 감사로그 insert는 실제 삭제가 "성공한 뒤"에만 시도하고,
-// 그 insert가 실패하더라도 삭제 자체를 되돌리거나 클라이언트에 실패로 보고하지 않는다. 이유는
-// deleteUser가 이미 실행되어 계정이 실제로 사라진 시점 이후이므로, 여기서 "실패로 되돌린다"는
-// 개념 자체가 성립하지 않는다(이미 벌어진 일을 취소할 수 없다) — 굳이 fail-closed로 설계하려면
-// 감사로그를 삭제보다 "먼저" 써야 하는데, 그러면 감사로그 테이블 문제로 정당한 긴급삭제가 막히는
-// 것이 오삭제 추적 실패보다 더 나쁜 실패모드라고 판단했다(부가기능인 감사로그가 핵심기능인 삭제를
-// 인질로 잡으면 안 된다). 대신 insert 실패는 console.error로 서버측 로그(Supabase Edge Function
-// 로그)에 남겨 운영자가 인지할 수 있게 한다.
+// ★운영계약 — 2단계(오너 승인 A안, 2026-08-12 · 최초 설계에서 교체됨): 최초 설계는 "삭제 성공 후
+// 에만 감사로그 insert"였는데, reviewer-codex가 "그 insert 자체가 실패하면 감사행이 전혀 없는
+// 영구삭제가 가능하다"고 재지적했다. 그래서 아래처럼 두 단계로 나눴다:
+//   1) 실제 삭제(deleteUser)를 시도하기 *전에* status='pending'인 감사로그 행을 먼저 insert한다.
+//      이 최초 insert가 실패하면 삭제 자체를 진행하지 않는다(fail-closed) — "삭제는 됐는데 기록이
+//      아예 없다"는 상황을 구조적으로 불가능하게 만드는 것이 이번 교체의 핵심이다.
+//   2) 삭제 결과(성공/실패)가 나오면 그 pending 행을 update해서 status를 'success'/'failed'로
+//      반영한다. 이 update 자체는 fail-open이다 — 이 시점엔 이미 pending 행이 존재해 "시도했다"는
+//      최소 기록은 보장돼 있고, deleteUser 결과 자체(성공이든 실패든)도 이미 확정돼 되돌릴 수
+//      없으므로, update 실패로 삭제 응답을 바꾸는 건 의미가 없다(대신 console.error로 남긴다 —
+//      pending인 채로 멈춘 행은 그 자체로 "결과 기록이 안 됐다"는 신호이니 사후 조사 대상이 된다).
 
 // deno-lint-ignore-file no-explicit-any
 import { withSupabase } from "npm:@supabase/server@^1";
@@ -134,10 +140,11 @@ export async function handleRequest(
 
   // 4) 대상 회원의 이름을 삭제 전에 미리 확보 — 감사로그용. profiles 행은 삭제되면 사라지므로
   //    지금 시점의 값을 남겨두지 않으면 나중엔 target_id만으로 누구였는지 알 수 없다.
-  //    이 조회가 실패해도(예: 이미 지워진 id) 감사로그의 부가정보일 뿐이니 삭제 자체는 막지 않는다.
+  //    service_role로 직접 조회한다(RLS 경로에 기대지 않는다 — 위 파일 상단 주석 참고).
+  //    이 조회가 실패해도(예: 이미 지워진 id) 감사로그의 부가정보일 뿐이니 계속 진행한다.
   let targetName: string | null = null;
   try {
-    const { data: targetProfile } = await ctx.supabase
+    const { data: targetProfile } = await ctx.supabaseAdmin
       .from("profiles")
       .select("name")
       .eq("id", targetUserId)
@@ -147,39 +154,78 @@ export async function handleRequest(
     targetName = null;
   }
 
-  // 5) 실제 삭제 — service_role 권한(ctx.supabaseAdmin)으로만 수행. 여기 도달했다는 것
-  //    자체가 위 1)·3) 검증을 모두 통과했다는 뜻이다. profiles는 on delete cascade로
-  //    자동 정리되므로 이 함수는 auth.users만 지운다.
+  // 5) 감사로그 pending 행을 실제 삭제보다 먼저 insert한다(운영계약 1단계, 위 파일 상단 주석
+  //    참고) — 이 insert가 실패하면 삭제 자체를 진행하지 않는다(fail-closed). 이렇게 해야
+  //    "삭제는 됐는데 기록이 아예 없는" 상황이 구조적으로 불가능해진다.
+  const { data: auditRow, error: auditInsertErr } = await ctx.supabaseAdmin
+    .from("admin_delete_audit_log")
+    .insert({
+      actor_id: ctx.userClaims.id,
+      target_id: targetUserId,
+      target_name: targetName,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (auditInsertErr || !auditRow?.id) {
+    console.error(
+      "admin-delete-member: 감사로그 pending insert 실패 — 삭제를 진행하지 않음",
+      targetUserId,
+      auditInsertErr?.message,
+    );
+    return Response.json(
+      { error: "삭제 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." },
+      { status: 500 },
+    );
+  }
+  const auditRowId = auditRow.id;
+
+  // 6) 실제 삭제 — service_role 권한(ctx.supabaseAdmin)으로만 수행. 여기 도달했다는 것
+  //    자체가 위 1)·3) 검증을 모두 통과하고 감사로그 pending 행도 확보됐다는 뜻이다.
+  //    profiles는 on delete cascade로 자동 정리되므로 이 함수는 auth.users만 지운다.
   const { error: deleteErr } = await ctx.supabaseAdmin.auth.admin
     .deleteUser(targetUserId);
 
   if (deleteErr) {
     // ★Admin API의 상세 에러 메시지를 클라이언트에 그대로 노출하지 않는다(reviewer-codex 지적
     // 반영) — 내부 구현 세부사항 유출을 막기 위해 클라이언트에는 일반적인 문구만 보내고, 상세
-    // 내용은 서버측 로그(Supabase Edge Function 로그에서 console.error로 확인 가능)로만 남긴다.
+    // 내용은 서버측 로그와 감사로그(error_message)로만 남긴다.
     console.error("admin-delete-member: deleteUser 실패", targetUserId, deleteErr.message);
+    // 결과를 감사로그에 반영 — 운영계약 2단계(fail-open, 위 파일 상단 주석 참고): 이 update가
+    // 실패해도 pending 행은 이미 존재하므로 "시도했다"는 최소 기록은 남아있다.
+    try {
+      const { error: updateErr } = await ctx.supabaseAdmin
+        .from("admin_delete_audit_log")
+        .update({ status: "failed", error_message: deleteErr.message })
+        .eq("id", auditRowId);
+      if (updateErr) {
+        console.error("admin-delete-member: 감사로그 실패상태 update 실패(pending 행은 유지됨)", updateErr.message);
+      }
+    } catch (err) {
+      console.error("admin-delete-member: 감사로그 update 중 예외(pending 행은 유지됨)", err);
+    }
     return Response.json(
       { error: "회원 삭제에 실패했습니다. 잠시 후 다시 시도해주세요." },
       { status: 500 },
     );
   }
 
-  // 6) 감사로그 기록 — fail-open(운영계약, 위 파일 상단 주석 참고): 삭제는 이미 성공적으로
-  //    완료된 뒤이므로, 이 insert가 실패하더라도 삭제를 되돌리거나 클라이언트에 실패로 보고하지
-  //    않는다. 실패 시 서버측 로그에만 남긴다.
+  // 7) 성공 결과도 감사로그에 반영 — 마찬가지로 fail-open(운영계약 2단계). 여기 도달했다는
+  //    것 자체가 이미 계정이 실제로 삭제됐다는 뜻이라, 이 update 실패로 응답을 바꾸지 않는다.
   try {
-    const { error: auditErr } = await ctx.supabaseAdmin
+    const { error: updateErr } = await ctx.supabaseAdmin
       .from("admin_delete_audit_log")
-      .insert({
-        actor_id: ctx.userClaims.id,
-        target_id: targetUserId,
-        target_name: targetName,
-      });
-    if (auditErr) {
-      console.error("admin-delete-member: 감사로그 insert 실패(삭제는 이미 완료됨)", auditErr.message);
+      .update({ status: "success" })
+      .eq("id", auditRowId);
+    if (updateErr) {
+      console.error(
+        "admin-delete-member: 감사로그 성공상태 update 실패(pending 행은 유지됨, 삭제는 이미 완료됨)",
+        updateErr.message,
+      );
     }
   } catch (err) {
-    console.error("admin-delete-member: 감사로그 insert 중 예외(삭제는 이미 완료됨)", err);
+    console.error("admin-delete-member: 감사로그 update 중 예외(삭제는 이미 완료됨)", err);
   }
 
   return Response.json({ success: true });
