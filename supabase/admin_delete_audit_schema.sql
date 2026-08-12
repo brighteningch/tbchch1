@@ -40,3 +40,21 @@ alter table admin_delete_audit_log enable row level security;
 drop policy if exists "admin_delete_audit_log admin select" on admin_delete_audit_log;
 create policy "admin_delete_audit_log admin select" on admin_delete_audit_log
   for select using (is_admin());
+
+-- ★일회성 데이터 정정 이력(reviewer-codex 3차 검토 지적, 2026-08-12): 위 `add column ... default
+-- 'pending'`은 이미 존재하던 행에도 기본값 'pending'을 채워 넣는다 — 이 컬럼이 생기기 전(최초
+-- 설계)에는 삭제가 "성공했을 때만" 행을 insert했으므로, 그 시절 행들은 전부 실제로는 성공한
+-- 삭제였는데도 'pending'으로 잘못 표시되는 문제가 있었다. 이 파일을 최초로 라이브에 적용한
+-- 직후, 그 시점까지 존재하던 단 1개 행(id=5a39d4f5-728d-434c-848d-cb7bbe12ecba)을 수동으로
+-- status='success'로 1회성 정정했다(그 삭제가 실제로 성공했음을 배포 당시 evidence로 이미
+-- 확인해뒀던 건). 이 파일 자체에는 반복 실행 가능한 backfill을 넣지 않는다 — "status='pending'
+-- 인 행을 전부 success로 바꾼다"는 조건은 재실행 시 진짜(현재 진행 중이거나 update가 막힌)
+-- pending 행까지 잘못 success로 덮어써버리므로 위험하다. 신규 설치(빈 테이블)에는 애초에 이
+-- 문제가 발생하지 않는다.
+--
+-- ★운영 절차(reviewer-codex 지적 — 장기간 pending으로 남은 행 조사법): status='pending'인 행이
+-- 오래 남아있다면(정상 흐름은 수 초 내 success/failed로 update됨) index.ts 6)/7)단계의 update가
+-- 실패했다는 뜻이다 — 삭제 시도 자체(성공/실패)는 이미 확정됐지만 그 결과가 기록만 안 된 상태다.
+-- 실제 결과를 알아내려면 target_id로 auth.users를 직접 조회한다: 그 id가 더 이상 존재하지 않으면
+-- 삭제는 성공한 것이고(수동으로 status='success'로 고칠 수 있다), 여전히 존재하면 삭제가 실패한
+-- 것이다(Supabase Edge Function 로그에서 같은 시각의 console.error로 원인 확인).
