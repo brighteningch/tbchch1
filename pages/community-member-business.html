@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성도 사업처 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>✦</text></svg>">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">지역자료실</span>
+  <h1>성도 사업처</h1>
+  <p>빛나는교회 성도님들의 사업체·가게를 서로 소개하고 알리는 공간입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:760px;">
+  <div id="bizGuard" class="admin-guard" hidden>
+    <p>로그인 후 글을 쓸 수 있습니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <form id="bizForm" class="sermon-form" hidden style="margin-bottom:32px;">
+    <label>제목
+      <input type="text" id="biz-title" required placeholder="예: OO식당 - 계룡시 엄사면">
+    </label>
+    <label>내용
+      <textarea id="biz-body" rows="6" required placeholder="사업체 소개, 위치, 연락처 등을 자유롭게 적어주세요."></textarea>
+    </label>
+    <label>사진 (선택)
+      <input type="file" id="biz-image" accept="image/*">
+    </label>
+    <img id="biz-preview" hidden alt="선택한 사진 미리보기" style="max-width:240px;border-radius:10px;margin-top:8px;display:block;">
+    <div class="sermon-form-actions">
+      <button type="submit" class="btn btn-primary" id="biz-submit-btn">글 등록</button>
+    </div>
+    <p class="auth-error" id="biz-error" hidden></p>
+  </form>
+
+  <div id="biz-post-list" class="biz-post-list"></div>
+  <p class="community-empty" id="biz-empty" hidden>아직 등록된 글이 없습니다. 첫 글을 남겨보세요!</p>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/community-data.js"></script>
+<script src="/common.js"></script>
+<script>
+const BIZ_BOARD = 'community-member-business';
+const BIZ_BUCKET = 'community-post-images';
+function escBiz(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+let __bizProfile = null;
+let __bizPosts = [];
+
+function bizPostCardHtml(p) {
+  const isMine = __bizProfile && p.author_id === __bizProfile.id;
+  const canDelete = isMine || (__bizProfile && __bizProfile.is_admin);
+  return `
+    <div class="biz-post-card" data-id="${p.id}">
+      <div class="biz-post-thumb">${p.image_url ? `<img src="${escBiz(p.image_url)}" alt="${escBiz(p.title)}" loading="lazy">` : ''}</div>
+      <div class="biz-post-body">
+        <p class="biz-post-title">${escBiz(p.title)}</p>
+        <p class="biz-post-meta">${escBiz(p.author_name)} · ${(p.created_at || '').slice(0, 10)}</p>
+        <p class="biz-post-text">${escBiz(p.body)}</p>
+      </div>
+      ${canDelete ? `<button type="button" class="btn btn-ghost btn-sm biz-post-delete" data-delete="${p.id}">삭제</button>` : ''}
+    </div>`;
+}
+
+async function loadBizPosts() {
+  const listEl = document.getElementById('biz-post-list');
+  const emptyEl = document.getElementById('biz-empty');
+  __bizPosts = await fetchCommunityPosts(BIZ_BOARD);
+  if (__bizPosts.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+  listEl.innerHTML = __bizPosts.map(bizPostCardHtml).join('');
+  listEl.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', () => removeBizPost(btn.dataset.delete));
+  });
+}
+
+async function removeBizPost(id) {
+  const post = __bizPosts.find(p => p.id === id);
+  if (!confirm(`"${post ? post.title : ''}" 글을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  try {
+    await deleteCommunityPost(id);
+    if (post && post.image_path) {
+      const sb = requireSupabaseClient();
+      await sb.storage.from(BIZ_BUCKET).remove([post.image_path]);
+    }
+    await loadBizPosts();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('biz-image').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const preview = document.getElementById('biz-preview');
+  if (!file) { preview.hidden = true; preview.src = ''; return; }
+  preview.src = URL.createObjectURL(file);
+  preview.hidden = false;
+});
+
+document.getElementById('bizForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('biz-error');
+  errorEl.hidden = true;
+  const title = document.getElementById('biz-title').value.trim();
+  const body = document.getElementById('biz-body').value.trim();
+  const file = document.getElementById('biz-image').files[0];
+  const submitBtn = document.getElementById('biz-submit-btn');
+  if (!title || !body) return;
+
+  submitBtn.disabled = true;
+  try {
+    const sb = requireSupabaseClient();
+    let imageUrl = null;
+    let imagePath = null;
+    if (file) {
+      submitBtn.textContent = '업로드 중…';
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: uploadError } = await sb.storage.from(BIZ_BUCKET).upload(path, file, { upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: pub } = sb.storage.from(BIZ_BUCKET).getPublicUrl(path);
+      imageUrl = pub.publicUrl;
+      imagePath = path;
+    }
+
+    await createCommunityPost({
+      board: BIZ_BOARD,
+      author_id: __bizProfile.id,
+      author_name: __bizProfile.name,
+      title, body,
+      image_url: imageUrl, image_path: imagePath,
+    });
+
+    document.getElementById('bizForm').reset();
+    document.getElementById('biz-preview').hidden = true;
+    await loadBizPosts();
+  } catch (err) {
+    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '글 등록';
+  }
+});
+
+async function initBizPage() {
+  __bizProfile = await getCurrentProfile();
+  if (!__bizProfile) {
+    document.getElementById('bizGuard').hidden = false;
+  } else {
+    document.getElementById('bizForm').hidden = false;
+  }
+  await loadBizPosts();
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initBizPage, 400));
+</script>
+</body>
+</html>
