@@ -291,10 +291,12 @@ function isSafeNavHref(href) {
 // app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
 // 이 검사를 통과 못하면 applyDynamicNavMenu는 아무것도 하지 않고 header.html의 하드코딩된
 // 메뉴를 그대로 둔다 — "값이 없거나 파싱 실패해도 사이트가 절대 깨지면 안 된다"는 요구사항의
-// 핵심 방어선이다. 그룹 개수(6개 고정)와 href 안전성도 여기서 함께 강제한다(reviewer-codex
-// 지적 반영 — 예전엔 groups.length > 0만 봐서 그룹개수·악성href를 걸러내지 못했다).
+// 핵심 방어선이다. href 안전성(isSafeNavHref)도 여기서 함께 강제한다(reviewer-codex 지적
+// 반영 — 예전엔 이 검사가 없어 악성href를 걸러내지 못했다). ★그룹 개수는 6개로 고정하지
+// 않는다(오너 정정지시, 2026-08-12) — 최초에는 "그룹 6개 고정"으로 설계했으나 그룹 자체의
+// 추가·삭제도 허용하는 쪽으로 방향이 바뀌어 groups.length > 0만 요구한다.
 function isValidNavMenu(data) {
-  return !!data && Array.isArray(data.groups) && data.groups.length === 6 &&
+  return !!data && Array.isArray(data.groups) && data.groups.length > 0 &&
     data.groups.every(g => g && typeof g.label === 'string' && Array.isArray(g.items) &&
       g.items.every(it => it && typeof it.label === 'string' && isSafeNavHref(it.href)));
 }

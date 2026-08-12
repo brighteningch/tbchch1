@@ -129,9 +129,11 @@ function isSafeNavHref(href) {
 }
 
 // 유효하면 null, 아니면 관리자가 바로 어디를 고쳐야 하는지 알 수 있는 문구를 반환한다.
+// ★그룹 개수는 고정하지 않는다(오너 정정지시, 2026-08-12) — 최초에는 "그룹 6개 고정"으로
+// 설계했으나 그룹 자체의 추가·삭제도 허용하는 쪽으로 방향이 바뀌어 최소 1개 이상만 요구한다.
 function validateNavMenuForSave(data) {
   if (!data || !Array.isArray(data.groups)) return '메뉴 데이터 형식에 문제가 있습니다.';
-  if (data.groups.length !== 6) return `그룹은 6개여야 하는데 현재 ${data.groups.length}개입니다.`;
+  if (data.groups.length === 0) return '그룹이 최소 1개는 있어야 합니다.';
   for (let gi = 0; gi < data.groups.length; gi++) {
     const g = data.groups[gi];
     if (!g || typeof g.label !== 'string' || !g.label.trim()) {
