@@ -27,7 +27,7 @@
       <div class="magazine-cat-list" id="nm-cat-list"></div>
     </div>
     <div class="magazine-main">
-      <div class="magazine-post-list" id="nm-post-list"></div>
+      <div id="nm-sections"></div>
       <p class="magazine-empty" id="nm-empty" hidden>아직 등록된 글이 없습니다.</p>
     </div>
   </div>
@@ -42,61 +42,98 @@
 <script>
 function escHtml(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-let __nmCategories = [];
-let __nmActiveCategory = null;
+// script.js(홈페이지 미리보기)의 magazineThumbHtml과 동일한 폴백 규칙 — 이 페이지는
+// 자체 인라인 스크립트로 완결되는 기존 프로젝트 컨벤션(페이지마다 독립 스크립트)을 따라
+// 별도 공유 모듈로 빼지 않고 그대로 복제한다.
+function nmThumbHtml(post) {
+  if (post.file_type === 'image') {
+    return `<div class="magazine-nm-card-thumb"><img src="${post.file_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`;
+  }
+  if (post.thumbnail_url) {
+    return `<div class="magazine-nm-card-thumb"><img src="${post.thumbnail_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`;
+  }
+  return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📄</div>`;
+}
 
-async function renderNmCategory(category) {
-  __nmActiveCategory = category;
-  document.querySelectorAll('#nm-cat-list .magazine-cat-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.category === category);
-  });
-  const postListEl = document.getElementById('nm-post-list');
+function nmCardHtml(post) {
+  return `
+    <a class="magazine-nm-card" href="${post.file_url}" target="_blank" rel="noopener">
+      ${nmThumbHtml(post)}
+      <div class="magazine-nm-card-body">
+        <p class="magazine-post-title">${escHtml(post.title)}</p>
+        <p class="magazine-post-date">${(post.created_at || '').slice(0, 10)}</p>
+        <span class="magazine-post-badge">${post.file_type === 'pdf' ? 'PDF' : '사진'}</span>
+      </div>
+    </a>`;
+}
+
+// 카테고리 클릭 시 목록을 통째로 바꿔치기하던 예전 방식 대신, 카테고리별 섹션을 전부
+// 한 페이지에 순서대로 렌더링하고 사이드바는 그 섹션으로 스크롤 이동하는 앵커 내비게이션으로
+// 바꾼다. 카테고리 목록/전체 글을 각각 두 번 조회하던 것도 한 번의 fetchMagazinePosts()
+// 호출 결과에서 그룹핑하는 것으로 합쳐 왕복을 줄인다.
+let __nmObserver = null;
+
+async function loadMagazinePage() {
+  const catListEl = document.getElementById('nm-cat-list');
+  const sectionsEl = document.getElementById('nm-sections');
   const emptyEl = document.getElementById('nm-empty');
-  postListEl.innerHTML = '<p class="magazine-empty">불러오는 중...</p>';
   try {
-    const posts = await fetchMagazinePosts(category);
+    const posts = await fetchMagazinePosts();
     if (posts.length === 0) {
-      postListEl.innerHTML = '';
+      catListEl.innerHTML = '';
+      sectionsEl.innerHTML = '';
       emptyEl.hidden = false;
       return;
     }
     emptyEl.hidden = true;
-    postListEl.innerHTML = posts.map(p => `
-      <a class="magazine-post-card" href="${p.file_url}" target="_blank" rel="noopener">
-        <div>
-          <p class="magazine-post-title">${escHtml(p.title)}</p>
-          <p class="magazine-post-date">${(p.created_at || '').slice(0, 10)}</p>
+
+    const grouped = new Map();
+    posts.forEach(p => {
+      if (!grouped.has(p.category)) grouped.set(p.category, []);
+      grouped.get(p.category).push(p);
+    });
+    const categories = Array.from(grouped.keys());
+
+    catListEl.innerHTML = categories.map((c, i) => `
+      <a href="#nm-section-${i}" class="magazine-cat-btn" data-index="${i}">${escHtml(c)}</a>`).join('');
+
+    sectionsEl.innerHTML = categories.map((c, i) => `
+      <section class="magazine-nm-section" id="nm-section-${i}">
+        <h2 class="magazine-nm-section-title">${escHtml(c)}</h2>
+        <div class="magazine-nm-grid">
+          ${grouped.get(c).map(nmCardHtml).join('')}
         </div>
-        <span class="magazine-post-badge">${p.file_type === 'pdf' ? 'PDF' : '사진'}</span>
-      </a>`).join('');
+      </section>`).join('');
+
+    // 스크롤 중 화면에 걸쳐 있는 섹션의 사이드바 항목을 활성 표시한다.
+    if (__nmObserver) __nmObserver.disconnect();
+    __nmObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const idx = entry.target.id.replace('nm-section-', '');
+        document.querySelectorAll('#nm-cat-list .magazine-cat-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.index === idx);
+        });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('.magazine-nm-section').forEach(el => __nmObserver.observe(el));
+    if (categories.length > 0) {
+      document.querySelector('#nm-cat-list .magazine-cat-btn').classList.add('active');
+    }
+
+    // 마지막 섹션이 한 화면보다 짧으면 그 아래로 스크롤할 여지가 없어(문서가 거기서 끝남)
+    // 관찰 트리거 영역이 이전 섹션에 걸쳐 있는 채로 멈출 수 있다 — 페이지 맨 아래 근처면
+    // 무조건 마지막 카테고리를 활성 표시해 이 경우를 보정한다.
+    window.addEventListener('scroll', () => {
+      const nearBottom = window.scrollY + window.innerHeight >= document.body.scrollHeight - 4;
+      if (!nearBottom) return;
+      const btns = document.querySelectorAll('#nm-cat-list .magazine-cat-btn');
+      btns.forEach((btn, i) => btn.classList.toggle('active', i === btns.length - 1));
+    }, { passive: true });
   } catch (err) {
     console.error('빛나는 매거진 목록 로드 실패:', err);
-    postListEl.innerHTML = '';
-    emptyEl.hidden = false;
-  }
-}
-
-async function loadMagazinePage() {
-  const catListEl = document.getElementById('nm-cat-list');
-  const emptyEl = document.getElementById('nm-empty');
-  try {
-    __nmCategories = await fetchMagazineCategories();
-    if (__nmCategories.length === 0) {
-      catListEl.innerHTML = '';
-      document.getElementById('nm-post-list').innerHTML = '';
-      emptyEl.hidden = false;
-      return;
-    }
-    catListEl.innerHTML = __nmCategories.map(c => `
-      <button type="button" class="magazine-cat-btn" data-category="${escHtml(c)}">${escHtml(c)}</button>`).join('');
-    catListEl.querySelectorAll('.magazine-cat-btn').forEach(btn => {
-      btn.addEventListener('click', () => renderNmCategory(btn.dataset.category));
-    });
-    await renderNmCategory(__nmCategories[0]);
-  } catch (err) {
-    console.error('빛나는 매거진 카테고리 로드 실패:', err);
     catListEl.innerHTML = '';
-    document.getElementById('nm-post-list').innerHTML = '';
+    sectionsEl.innerHTML = '';
     emptyEl.hidden = false;
   }
 }
