@@ -173,6 +173,25 @@ document.getElementById('nmSaveBtn').addEventListener('click', async () => {
   }
 });
 
+// app_settings에 nav_menu 값이 아직 한 번도 저장된 적 없는 최초 상태(reviewer-gemini 제안
+// 반영, 2026-08-12)를 위한 폴백 — header.html의 현재 정적 메뉴를 파싱해 그대로 편집 시작
+// 화면으로 보여준다("아직 저장된 값이 없습니다" 에러만 보고 당황하지 않도록). #instagramLink는
+// 이 기능의 편집 대상이 아니므로(common.js의 buildNavMenuHtml과 동일 원칙) 파싱 결과에서
+// 제외한다.
+async function parseNavMenuFromHeaderHtml() {
+  const res = await fetch('/partials/header.html');
+  const html = await res.text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const groups = Array.from(doc.querySelectorAll('.mm-item')).map(item => {
+    const label = (item.querySelector('.mm-trigger')?.childNodes[0]?.textContent || '').trim();
+    const items = Array.from(item.querySelectorAll('.mm-panel a'))
+      .filter(a => a.id !== 'instagramLink')
+      .map(a => ({ label: (a.textContent || '').trim(), href: a.getAttribute('href') || '' }));
+    return { label, items };
+  });
+  return { groups };
+}
+
 async function initAdminNavMenuPage() {
   const profile = await getCurrentProfile();
   if (!profile || !profile.is_admin) {
@@ -183,10 +202,14 @@ async function initAdminNavMenuPage() {
   const errEl = document.getElementById('nmError');
   try {
     const raw = await fetchAppSetting(NAV_MENU_SETTING_KEY);
-    if (!raw) throw new Error('아직 저장된 메뉴 설정이 없습니다(app_settings에 nav_menu 값이 없음).');
-    const parsed = JSON.parse(raw);
+    let parsed;
+    if (!raw) {
+      parsed = await parseNavMenuFromHeaderHtml();
+    } else {
+      parsed = JSON.parse(raw);
+    }
     const loadError = validateNavMenuForSave(parsed);
-    if (loadError) throw new Error('저장된 메뉴 설정의 형식이 올바르지 않습니다: ' + loadError);
+    if (loadError) throw new Error('메뉴 설정의 형식이 올바르지 않습니다: ' + loadError);
     __navMenu = parsed;
     renderNavMenuForm();
   } catch (err) {
