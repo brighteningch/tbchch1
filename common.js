@@ -282,10 +282,11 @@ function escNav(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(
 // 있다는 것만으로는 안전하지 않다 — 관리자 세션이 탈취되면 공격자가 href에 "javascript:..."를
 // 넣을 수 있고, 이 값은 모든 방문자에게 그대로 <a href>로 렌더링돼 클릭하는 누구에게나 실행되는
 // 저장형 XSS가 된다(관리자 자신만 위험한 게 아니라 전체 방문자가 위험해진다). 이 사이트 안에서
-// 쓸 이유가 있는 형태(내부 경로 "/...", 외부 링크 "https://...", 페이지 내 앵커 "#...")만
-// 허용하고 그 외(javascript:, data:, vbscript:, 프로토콜 상대경로 "//..." 등)는 전부 막는다.
+// 쓸 이유가 있는 형태(내부 경로 "/...", 외부 링크 "https://...", 이메일 "mailto:...", 전화
+// "tel:...", 페이지 내 앵커 "#...")만 허용하고 그 외(javascript:, data:, vbscript:, 프로토콜
+// 상대경로 "//..." 등)는 전부 막는다.
 function isSafeNavHref(href) {
-  return typeof href === 'string' && /^(\/(?!\/)|https:\/\/|#)/i.test(href.trim());
+  return typeof href === 'string' && /^(\/(?!\/)|https:\/\/|mailto:|tel:|#)/i.test(href.trim());
 }
 
 // app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
