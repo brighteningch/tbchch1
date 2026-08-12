@@ -30,6 +30,21 @@
 // 재검증·자기자신 차단이 모두 통과해야만 도달한다. profiles 행은 supabase-schema.sql에서
 // `id uuid references auth.users on delete cascade`로 정의돼 있으므로 auth.users 삭제만으로
 // profiles도 자동 정리된다 — 이 함수가 profiles를 별도로 delete하지 않는다.
+//
+// ★감사 로그(reviewer-codex 보안검토 REVISE 반영, 2026-08-12): 계정 영구삭제는 되돌릴 수 없는데
+// 누가/누구를/언제 지웠는지 기록이 없으면 오삭제나 탈취된 관리자 세션 악용을 사후에 추적할 방법이
+// 없다. supabase/admin_delete_audit_schema.sql의 admin_delete_audit_log에 actor_id/target_id/
+// target_name/created_at을 남긴다. target_name은 profiles 행이 삭제로 사라지기 전에 미리 조회해
+// 담아둔다(삭제 후에는 다시 조회할 수 없으므로).
+//
+// ★운영계약(fail-open, 의도적 선택): 감사로그 insert는 실제 삭제가 "성공한 뒤"에만 시도하고,
+// 그 insert가 실패하더라도 삭제 자체를 되돌리거나 클라이언트에 실패로 보고하지 않는다. 이유는
+// deleteUser가 이미 실행되어 계정이 실제로 사라진 시점 이후이므로, 여기서 "실패로 되돌린다"는
+// 개념 자체가 성립하지 않는다(이미 벌어진 일을 취소할 수 없다) — 굳이 fail-closed로 설계하려면
+// 감사로그를 삭제보다 "먼저" 써야 하는데, 그러면 감사로그 테이블 문제로 정당한 긴급삭제가 막히는
+// 것이 오삭제 추적 실패보다 더 나쁜 실패모드라고 판단했다(부가기능인 감사로그가 핵심기능인 삭제를
+// 인질로 잡으면 안 된다). 대신 insert 실패는 console.error로 서버측 로그(Supabase Edge Function
+// 로그)에 남겨 운영자가 인지할 수 있게 한다.
 
 // deno-lint-ignore-file no-explicit-any
 import { withSupabase } from "npm:@supabase/server@^1";
@@ -53,6 +68,7 @@ export interface HandlerCtx {
         ) => Promise<{ data: unknown; error: { message: string } | null }>;
       };
     };
+    from: (table: string) => any;
   };
 }
 
@@ -116,17 +132,54 @@ export async function handleRequest(
     );
   }
 
-  // 4) 실제 삭제 — service_role 권한(ctx.supabaseAdmin)으로만 수행. 여기 도달했다는 것
+  // 4) 대상 회원의 이름을 삭제 전에 미리 확보 — 감사로그용. profiles 행은 삭제되면 사라지므로
+  //    지금 시점의 값을 남겨두지 않으면 나중엔 target_id만으로 누구였는지 알 수 없다.
+  //    이 조회가 실패해도(예: 이미 지워진 id) 감사로그의 부가정보일 뿐이니 삭제 자체는 막지 않는다.
+  let targetName: string | null = null;
+  try {
+    const { data: targetProfile } = await ctx.supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", targetUserId)
+      .single();
+    targetName = targetProfile?.name ?? null;
+  } catch {
+    targetName = null;
+  }
+
+  // 5) 실제 삭제 — service_role 권한(ctx.supabaseAdmin)으로만 수행. 여기 도달했다는 것
   //    자체가 위 1)·3) 검증을 모두 통과했다는 뜻이다. profiles는 on delete cascade로
   //    자동 정리되므로 이 함수는 auth.users만 지운다.
   const { error: deleteErr } = await ctx.supabaseAdmin.auth.admin
     .deleteUser(targetUserId);
 
   if (deleteErr) {
+    // ★Admin API의 상세 에러 메시지를 클라이언트에 그대로 노출하지 않는다(reviewer-codex 지적
+    // 반영) — 내부 구현 세부사항 유출을 막기 위해 클라이언트에는 일반적인 문구만 보내고, 상세
+    // 내용은 서버측 로그(Supabase Edge Function 로그에서 console.error로 확인 가능)로만 남긴다.
+    console.error("admin-delete-member: deleteUser 실패", targetUserId, deleteErr.message);
     return Response.json(
-      { error: "회원 삭제에 실패했습니다: " + deleteErr.message },
+      { error: "회원 삭제에 실패했습니다. 잠시 후 다시 시도해주세요." },
       { status: 500 },
     );
+  }
+
+  // 6) 감사로그 기록 — fail-open(운영계약, 위 파일 상단 주석 참고): 삭제는 이미 성공적으로
+  //    완료된 뒤이므로, 이 insert가 실패하더라도 삭제를 되돌리거나 클라이언트에 실패로 보고하지
+  //    않는다. 실패 시 서버측 로그에만 남긴다.
+  try {
+    const { error: auditErr } = await ctx.supabaseAdmin
+      .from("admin_delete_audit_log")
+      .insert({
+        actor_id: ctx.userClaims.id,
+        target_id: targetUserId,
+        target_name: targetName,
+      });
+    if (auditErr) {
+      console.error("admin-delete-member: 감사로그 insert 실패(삭제는 이미 완료됨)", auditErr.message);
+    }
+  } catch (err) {
+    console.error("admin-delete-member: 감사로그 insert 중 예외(삭제는 이미 완료됨)", err);
   }
 
   return Response.json({ success: true });
