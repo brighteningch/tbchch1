@@ -278,14 +278,25 @@ function loadSiteData(callback) {
 
 function escNav(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
+// ★href 스킴 검증(reviewer-codex 보안검토 REVISE 반영, 2026-08-12): 관리자만 nav_menu를 쓸 수
+// 있다는 것만으로는 안전하지 않다 — 관리자 세션이 탈취되면 공격자가 href에 "javascript:..."를
+// 넣을 수 있고, 이 값은 모든 방문자에게 그대로 <a href>로 렌더링돼 클릭하는 누구에게나 실행되는
+// 저장형 XSS가 된다(관리자 자신만 위험한 게 아니라 전체 방문자가 위험해진다). 이 사이트 안에서
+// 쓸 이유가 있는 형태(내부 경로 "/...", 외부 링크 "https://...", 페이지 내 앵커 "#...")만
+// 허용하고 그 외(javascript:, data:, vbscript:, 프로토콜 상대경로 "//..." 등)는 전부 막는다.
+function isSafeNavHref(href) {
+  return typeof href === 'string' && /^(\/(?!\/)|https:\/\/|#)/i.test(href.trim());
+}
+
 // app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
 // 이 검사를 통과 못하면 applyDynamicNavMenu는 아무것도 하지 않고 header.html의 하드코딩된
 // 메뉴를 그대로 둔다 — "값이 없거나 파싱 실패해도 사이트가 절대 깨지면 안 된다"는 요구사항의
-// 핵심 방어선이다.
+// 핵심 방어선이다. 그룹 개수(6개 고정)와 href 안전성도 여기서 함께 강제한다(reviewer-codex
+// 지적 반영 — 예전엔 groups.length > 0만 봐서 그룹개수·악성href를 걸러내지 못했다).
 function isValidNavMenu(data) {
-  return !!data && Array.isArray(data.groups) && data.groups.length > 0 &&
+  return !!data && Array.isArray(data.groups) && data.groups.length === 6 &&
     data.groups.every(g => g && typeof g.label === 'string' && Array.isArray(g.items) &&
-      g.items.every(it => it && typeof it.label === 'string' && typeof it.href === 'string'));
+      g.items.every(it => it && typeof it.label === 'string' && isSafeNavHref(it.href)));
 }
 
 // nav_menu 데이터(그룹 배열)로 #nav 안의 메가메뉴 마크업을 header.html의 정적 버전과
