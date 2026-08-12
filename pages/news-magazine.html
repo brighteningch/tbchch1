@@ -33,6 +33,20 @@
   </div>
 </div>
 
+<div class="nm-lightbox" id="nm-lightbox" hidden>
+  <div class="nm-lightbox-backdrop" id="nm-lightbox-backdrop"></div>
+  <div class="nm-lightbox-box" role="dialog" aria-modal="true" aria-labelledby="nm-lightbox-title">
+    <div class="nm-lightbox-header">
+      <p class="nm-lightbox-title" id="nm-lightbox-title"></p>
+      <div class="nm-lightbox-actions">
+        <a class="nm-lightbox-open-link" id="nm-lightbox-open-link" href="#" target="_blank" rel="noopener">새 탭에서 원본 열기 ↗</a>
+        <button type="button" class="nm-lightbox-close" id="nm-lightbox-close" aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="nm-lightbox-body" id="nm-lightbox-body"></div>
+  </div>
+</div>
+
 <div id="footerHost"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
@@ -55,17 +69,49 @@ function nmThumbHtml(post) {
   return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📄</div>`;
 }
 
+// 카드는 더 이상 새 탭으로 나가는 <a>가 아니라 페이지 안에서 라이트박스를 여는
+// <button>이다(실제 이동이 아니라 인페이지 확대이므로 시맨틱상 이게 맞다). 원본으로
+// 나가는 진짜 링크는 라이트박스 안의 "새 탭에서 원본 열기"가 담당한다.
 function nmCardHtml(post) {
   return `
-    <a class="magazine-nm-card" href="${post.file_url}" target="_blank" rel="noopener">
+    <button type="button" class="magazine-nm-card" data-post-id="${post.id}">
       ${nmThumbHtml(post)}
       <div class="magazine-nm-card-body">
         <p class="magazine-post-title">${escHtml(post.title)}</p>
         <p class="magazine-post-date">${(post.created_at || '').slice(0, 10)}</p>
         <span class="magazine-post-badge">${post.file_type === 'pdf' ? 'PDF' : '사진'}</span>
       </div>
-    </a>`;
+    </button>`;
 }
+
+// ---------- 라이트박스: 카드 클릭 시 새 탭 대신 페이지 안에서 확대 표시 ----------
+let __nmPostsById = new Map();
+
+function openNmLightbox(post) {
+  const titleEl = document.getElementById('nm-lightbox-title');
+  const linkEl = document.getElementById('nm-lightbox-open-link');
+  const bodyEl = document.getElementById('nm-lightbox-body');
+  titleEl.textContent = post.title;
+  linkEl.href = post.file_url;
+  bodyEl.innerHTML = post.file_type === 'image'
+    ? `<img src="${post.file_url}" alt="${escHtml(post.title)}">`
+    : `<iframe src="${post.file_url}" title="${escHtml(post.title)}"></iframe>`;
+  document.getElementById('nm-lightbox').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeNmLightbox() {
+  document.getElementById('nm-lightbox').hidden = true;
+  document.body.style.overflow = '';
+  // 닫을 때 iframe/img src를 비워 PDF 뷰어·이미지 로딩을 확실히 중단시킨다.
+  document.getElementById('nm-lightbox-body').innerHTML = '';
+}
+
+document.getElementById('nm-lightbox-backdrop').addEventListener('click', closeNmLightbox);
+document.getElementById('nm-lightbox-close').addEventListener('click', closeNmLightbox);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('nm-lightbox').hidden) closeNmLightbox();
+});
 
 // 카테고리 클릭 시 목록을 통째로 바꿔치기하던 예전 방식 대신, 카테고리별 섹션을 전부
 // 한 페이지에 순서대로 렌더링하고 사이드바는 그 섹션으로 스크롤 이동하는 앵커 내비게이션으로
@@ -94,16 +140,28 @@ async function loadMagazinePage() {
     });
     const categories = Array.from(grouped.keys());
 
+    __nmPostsById = new Map(posts.map(p => [String(p.id), p]));
+
     catListEl.innerHTML = categories.map((c, i) => `
       <a href="#nm-section-${i}" class="magazine-cat-btn" data-index="${i}">${escHtml(c)}</a>`).join('');
 
     sectionsEl.innerHTML = categories.map((c, i) => `
       <section class="magazine-nm-section" id="nm-section-${i}">
-        <h2 class="magazine-nm-section-title">${escHtml(c)}</h2>
+        <div class="magazine-nm-section-head">
+          <h2 class="magazine-nm-section-title">${escHtml(c)}</h2>
+          <span class="magazine-nm-section-count">${grouped.get(c).length}건</span>
+        </div>
         <div class="magazine-nm-grid">
           ${grouped.get(c).map(nmCardHtml).join('')}
         </div>
       </section>`).join('');
+
+    sectionsEl.querySelectorAll('[data-post-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const post = __nmPostsById.get(btn.dataset.postId);
+        if (post) openNmLightbox(post);
+      });
+    });
 
     // 스크롤 중 화면에 걸쳐 있는 섹션의 사이드바 항목을 활성 표시한다.
     if (__nmObserver) __nmObserver.disconnect();
