@@ -204,42 +204,66 @@ body {
   box-shadow: 0 4px 14px rgba(15, 40, 70, 0.1);
 }
 
-/* ---------- 홈페이지 언론보도 카드 (활천 매거진 등) ---------- */
-.press-feature-card {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 10px 30px rgba(15, 40, 70, 0.06);
-  text-decoration: none;
+/* ---------- 빛나는 매거진(카테고리 게시판) — news-magazine.html 전용(사이드바+목록) ----------
+   ★2026-08-12: 홈페이지(index.html) 미리보기는 magazine-home-layout(교회뉴스 피처드+나머지
+   미리보기)으로 교체됐다. 아래 magazine-layout/magazine-sidebar/magazine-cat-list/
+   magazine-cat-btn/magazine-main/magazine-post-list 6개는 news-magazine.html이 여전히
+   그대로 쓰고 있으니 손대지 말 것(grep으로 재확인 후 보존 확정). magazine-post-card/
+   magazine-post-title/magazine-post-date/magazine-post-badge/magazine-empty 5개는
+   "카드 한 장" 순수 시각 스타일이라 news-magazine.html과 홈페이지 신규 레이아웃 둘 다에서
+   변경 없이 공유한다. */
+.magazine-layout { display: flex; gap: 28px; align-items: flex-start; }
+.magazine-sidebar { width: 200px; flex-shrink: 0; }
+.magazine-cat-list { display: flex; flex-direction: column; }
+.magazine-cat-btn {
+  display: block; width: 100%; text-align: left; padding: 10px 14px; font-size: 14px;
+  color: var(--text-dark); background: none; border: none; border-left: 2px solid var(--border-light);
+  border-radius: 0 8px 8px 0; cursor: pointer; font-family: var(--font-body);
+}
+.magazine-cat-btn:hover { color: var(--navy); background: var(--bg-cool); }
+.magazine-cat-btn.active { color: var(--navy); font-weight: 700; border-left-color: var(--navy); background: var(--bg-cool); }
+.magazine-main { flex: 1; min-width: 0; }
+.magazine-post-list { display: flex; flex-direction: column; gap: 10px; }
+.magazine-post-card {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: #fff; border-radius: 12px; padding: 16px 18px;
+  box-shadow: 0 6px 18px rgba(15,40,70,0.06); text-decoration: none; color: inherit;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
-.press-feature-card:hover { box-shadow: 0 14px 36px rgba(15, 40, 70, 0.1); transform: translateY(-2px); }
-.press-slideshow {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  max-height: 520px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--border-light);
-  background: var(--bg-cool);
+.magazine-post-card:hover { box-shadow: 0 10px 26px rgba(15,40,70,0.1); transform: translateY(-2px); }
+.magazine-post-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.magazine-post-date { font-size: 12.5px; color: var(--text-gray); }
+.magazine-post-badge { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: var(--bg-cool); color: var(--text-gray); white-space: nowrap; }
+.magazine-empty { text-align: center; color: var(--text-gray); padding: 24px 0; }
+@media (max-width: 820px) {
+  .magazine-layout { flex-direction: column; }
+  .magazine-sidebar { width: 100%; }
+  .magazine-main { width: 100%; }
+  .magazine-cat-list { flex-direction: row; flex-wrap: wrap; }
+  .magazine-cat-btn { border-left: none; border-bottom: 2px solid var(--border-light); border-radius: 0; }
+  .magazine-cat-btn.active { border-bottom-color: var(--navy); }
 }
-.press-slide {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  transition: opacity 0.8s ease;
+
+/* ---------- 빛나는 매거진 — 홈페이지 미리보기 전용(교회뉴스 피처드 + 나머지 우측 미리보기) ---------- */
+.magazine-home-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
+.magazine-home-featured { min-width: 0; }
+.magazine-post-card--featured {
+  flex-direction: column; align-items: stretch; justify-content: flex-start;
+  text-align: left; padding: 0; overflow: hidden;
 }
-.press-slide.is-active { opacity: 1; }
-.press-feature-body { display: flex; flex-direction: column; gap: 12px; text-align: center; }
-.press-feature-desc { font-size: 16px; color: var(--text-dark); line-height: 1.6; }
-.press-feature-cta { font-size: 15px; font-weight: 700; color: var(--navy); }
+.magazine-home-featured-thumb { width: 100%; aspect-ratio: 16 / 9; background: var(--bg-cool); overflow: hidden; }
+.magazine-home-featured-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.magazine-home-featured-thumb--pdf { display: flex; align-items: center; justify-content: center; font-size: 56px; }
+.magazine-post-card--featured { position: relative; padding-bottom: 20px; }
+.magazine-post-card--featured .magazine-post-title { font-size: 19px; padding: 20px 20px 0; margin-bottom: 8px; }
+.magazine-post-card--featured .magazine-post-date { padding: 0 20px; }
+.magazine-post-card--featured .magazine-post-badge { position: absolute; top: 14px; right: 14px; }
+.magazine-home-others { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.magazine-home-other-item { display: flex; flex-direction: column; gap: 6px; }
+.magazine-home-other-cat { font-size: 12px; font-weight: 700; color: var(--navy); letter-spacing: 0.2px; }
+@media (max-width: 820px) {
+  .magazine-home-layout { grid-template-columns: 1fr; }
+}
 
 /* ---------- 찬양 듣기 플로팅 플레이어 ---------- */
 .praise-player {
@@ -722,12 +746,12 @@ section { padding: 88px 0; }
 }
 .worship .section-title, .sermon .section-title,
 .gallery .section-title, .notice .section-title, .offering .section-title, .visit .section-title,
-.press .section-title {
+.magazine .section-title {
   text-align: center;
 }
 .worship .eyebrow, .sermon .eyebrow,
 .gallery .eyebrow, .notice .eyebrow, .offering .eyebrow, .visit .eyebrow,
-.press .eyebrow {
+.magazine .eyebrow {
   text-align: center;
 }
 

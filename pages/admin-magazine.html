@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>빛나는 매거진 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>✦</text></svg>">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .field-hint { font-size:12.5px; color:var(--text-gray); margin-top:-8px; }
+  .mg-filter-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .mg-filter-row select { padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-light); font-size:14px; }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">ADMIN</span>
+  <h1>빛나는 매거진 관리</h1>
+  <p>교회뉴스·영화이야기·용어이야기 등 카테고리별로 글을 올리고 관리합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:900px;">
+  <div id="adminGuard" class="admin-guard" hidden>
+    <p>관리자만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="adminContent" hidden>
+    <a href="/pages/news-magazine.html" class="btn btn-ghost btn-sm">← 빛나는 매거진으로</a>
+
+    <form id="form-magazine" class="sermon-form" style="margin-top:20px;">
+      <div class="sermon-form-row">
+        <label>카테고리
+          <input type="text" id="mg-category" list="mg-category-list" required placeholder="예: 교회뉴스, 영화이야기, 용어이야기 (기존 목록에서 고르거나 새로 입력)">
+          <datalist id="mg-category-list"></datalist>
+        </label>
+      </div>
+      <label>제목
+        <input type="text" id="mg-title" required placeholder="예: 빛나는교회, 활천 매거진에 소개됐어요">
+      </label>
+      <label>본문 (선택)
+        <textarea id="mg-body" rows="5" placeholder="간단한 소개 문구를 적어주세요."></textarea>
+      </label>
+      <label>파일 (PDF 또는 JPG 1개)
+        <input type="file" id="mg-file" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" required>
+      </label>
+      <p class="field-hint">PDF 또는 JPG 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다).</p>
+      <div class="sermon-form-actions">
+        <button type="submit" class="btn btn-primary" id="mg-submit-btn">글 등록</button>
+      </div>
+      <p class="auth-error" id="mg-error" hidden></p>
+    </form>
+
+    <div class="admin-toolbar" style="margin-top:36px;">
+      <p style="font-weight:700;">등록된 글</p>
+    </div>
+    <div class="mg-filter-row">
+      <label style="font-size:13.5px;font-weight:600;">카테고리 필터
+        <select id="mg-filter-category">
+          <option value="">전체</option>
+        </select>
+      </label>
+    </div>
+    <div class="sermon-table-wrap">
+      <table class="sermon-table">
+        <thead><tr><th>제목</th><th>카테고리</th><th>파일형식</th><th>등록일</th><th>관리</th></tr></thead>
+        <tbody id="mg-tbody"></tbody>
+      </table>
+    </div>
+    <p class="sermon-empty" id="mg-empty" hidden>등록된 글이 없습니다.</p>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/magazine-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const MAGAZINE_BUCKET = 'magazine-files';
+const MAGAZINE_ALLOWED_EXT = ['pdf', 'jpg', 'jpeg'];
+
+let __mgPosts = [];
+let __mgFilterCategory = '';
+
+function detectFileType(file) {
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (file.type === 'application/pdf' || ext === 'pdf') return 'pdf';
+  if (file.type === 'image/jpeg' || ext === 'jpg' || ext === 'jpeg') return 'image';
+  return null;
+}
+
+async function refreshCategoryOptions() {
+  let categories = [];
+  try {
+    categories = await fetchMagazineCategories();
+  } catch (err) {
+    categories = [];
+  }
+  const datalist = document.getElementById('mg-category-list');
+  datalist.innerHTML = categories.map(c => `<option value="${esc(c)}"></option>`).join('');
+  const filterSelect = document.getElementById('mg-filter-category');
+  const current = filterSelect.value;
+  filterSelect.innerHTML = '<option value="">전체</option>' + categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  filterSelect.value = categories.includes(current) ? current : '';
+}
+
+async function loadPostList() {
+  __mgPosts = await fetchMagazinePosts(__mgFilterCategory || undefined);
+  const tbody = document.getElementById('mg-tbody');
+  const empty = document.getElementById('mg-empty');
+  if (__mgPosts.length === 0) { tbody.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  tbody.innerHTML = __mgPosts.map(p => `
+    <tr>
+      <td>${esc(p.title)}</td>
+      <td>${esc(p.category)}</td>
+      <td>${p.file_type === 'pdf' ? 'PDF' : '이미지'}</td>
+      <td>${(p.created_at || '').slice(0, 10)}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-delete="${p.id}">삭제</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removePost(btn.dataset.delete)));
+}
+
+async function removePost(id) {
+  const post = __mgPosts.find(p => p.id === id);
+  if (!confirm(`"${post ? post.title : ''}" 글을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  try {
+    await deleteMagazinePost(id);
+    if (post && post.file_path) {
+      const sb = requireSupabaseClient();
+      await sb.storage.from(MAGAZINE_BUCKET).remove([post.file_path]);
+    }
+    await loadPostList();
+    await refreshCategoryOptions();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('mg-filter-category').addEventListener('change', (e) => {
+  __mgFilterCategory = e.target.value;
+  loadPostList();
+});
+
+document.getElementById('form-magazine').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('mg-error');
+  errorEl.hidden = true;
+  const category = document.getElementById('mg-category').value.trim();
+  const title = document.getElementById('mg-title').value.trim();
+  const body = document.getElementById('mg-body').value.trim();
+  const file = document.getElementById('mg-file').files[0];
+  const submitBtn = document.getElementById('mg-submit-btn');
+  if (!category || !title || !file) return;
+
+  const fileType = detectFileType(file);
+  if (!fileType) {
+    errorEl.textContent = 'PDF 또는 JPG 파일만 올릴 수 있습니다.';
+    errorEl.hidden = false;
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '업로드 중…';
+  try {
+    const sb = requireSupabaseClient();
+    const ext = (file.name.split('.').pop() || (fileType === 'pdf' ? 'pdf' : 'jpg')).toLowerCase();
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: uploadError } = await sb.storage.from(MAGAZINE_BUCKET).upload(path, file, { upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(path);
+
+    await createMagazinePost({
+      category, title, body: body || null,
+      file_url: pub.publicUrl, file_path: path, file_type: fileType,
+    });
+
+    document.getElementById('form-magazine').reset();
+    await loadPostList();
+    await refreshCategoryOptions();
+  } catch (err) {
+    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '글 등록';
+  }
+});
+
+async function initAdminMagazinePage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_admin) {
+    document.getElementById('adminGuard').hidden = false;
+    return;
+  }
+  document.getElementById('adminContent').hidden = false;
+  try {
+    await refreshCategoryOptions();
+    await loadPostList();
+  } catch (err) {
+    console.error(err);
+    const errEl = document.getElementById('mg-error');
+    errEl.textContent = '목록을 불러오지 못했습니다: ' + err.message + ' (Supabase에 supabase/magazine_schema.sql을 실행하셨는지 확인해주세요)';
+    errEl.hidden = false;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminMagazinePage, 400));
+</script>
+</body>
+</html>

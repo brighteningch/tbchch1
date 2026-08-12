@@ -13,16 +13,6 @@
       { "image": "/admin/uploads/hero/hero-006.jpg", "overlay": false }
     ]
   },
-  "press": {
-    "title": "빛나는교회, 활천 매거진에 소개됐어요",
-    "description": "“상처 입은 영혼들의 피난처, 계룡 빛나는교회” — 활천 2026년 8월호에 실린 우리 교회 이야기를 만나보세요.",
-    "pdf_file": "/content/press/hwalcheon-202608-brighteningch.pdf",
-    "slides": [
-      { "image": "/content/press/hwalcheon-202608-slide-1.jpg" },
-      { "image": "/content/press/hwalcheon-202608-slide-2.jpg" },
-      { "image": "/content/press/hwalcheon-202608-slide-3.jpg" }
-    ]
-  },
   "about": {
     "lead": "기독교대한성결교회 빛나는교회",
     "photo": "/admin/uploads/pastor-kim.jpg",

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>빛나는 매거진 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">CHURCH NEWS</span>
+  <h1>빛나는 매거진</h1>
+  <p>교회뉴스·영화이야기·용어이야기 등 다양한 이야기를 만나보세요.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:1100px;">
+  <div style="display:flex; justify-content:flex-end; margin-bottom:20px;">
+    <a href="/pages/admin-magazine.html" class="btn btn-primary btn-sm" id="magazineWriteBtn" hidden>글쓰기</a>
+  </div>
+
+  <div class="magazine-layout">
+    <div class="magazine-sidebar">
+      <div class="magazine-cat-list" id="nm-cat-list"></div>
+    </div>
+    <div class="magazine-main">
+      <div class="magazine-post-list" id="nm-post-list"></div>
+      <p class="magazine-empty" id="nm-empty" hidden>아직 등록된 글이 없습니다.</p>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/magazine-data.js"></script>
+<script src="/common.js"></script>
+<script>
+function escHtml(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+let __nmCategories = [];
+let __nmActiveCategory = null;
+
+async function renderNmCategory(category) {
+  __nmActiveCategory = category;
+  document.querySelectorAll('#nm-cat-list .magazine-cat-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.category === category);
+  });
+  const postListEl = document.getElementById('nm-post-list');
+  const emptyEl = document.getElementById('nm-empty');
+  postListEl.innerHTML = '<p class="magazine-empty">불러오는 중...</p>';
+  try {
+    const posts = await fetchMagazinePosts(category);
+    if (posts.length === 0) {
+      postListEl.innerHTML = '';
+      emptyEl.hidden = false;
+      return;
+    }
+    emptyEl.hidden = true;
+    postListEl.innerHTML = posts.map(p => `
+      <a class="magazine-post-card" href="${p.file_url}" target="_blank" rel="noopener">
+        <div>
+          <p class="magazine-post-title">${escHtml(p.title)}</p>
+          <p class="magazine-post-date">${(p.created_at || '').slice(0, 10)}</p>
+        </div>
+        <span class="magazine-post-badge">${p.file_type === 'pdf' ? 'PDF' : '사진'}</span>
+      </a>`).join('');
+  } catch (err) {
+    console.error('빛나는 매거진 목록 로드 실패:', err);
+    postListEl.innerHTML = '';
+    emptyEl.hidden = false;
+  }
+}
+
+async function loadMagazinePage() {
+  const catListEl = document.getElementById('nm-cat-list');
+  const emptyEl = document.getElementById('nm-empty');
+  try {
+    __nmCategories = await fetchMagazineCategories();
+    if (__nmCategories.length === 0) {
+      catListEl.innerHTML = '';
+      document.getElementById('nm-post-list').innerHTML = '';
+      emptyEl.hidden = false;
+      return;
+    }
+    catListEl.innerHTML = __nmCategories.map(c => `
+      <button type="button" class="magazine-cat-btn" data-category="${escHtml(c)}">${escHtml(c)}</button>`).join('');
+    catListEl.querySelectorAll('.magazine-cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => renderNmCategory(btn.dataset.category));
+    });
+    await renderNmCategory(__nmCategories[0]);
+  } catch (err) {
+    console.error('빛나는 매거진 카테고리 로드 실패:', err);
+    catListEl.innerHTML = '';
+    document.getElementById('nm-post-list').innerHTML = '';
+    emptyEl.hidden = false;
+  }
+}
+
+(async function () {
+  try {
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) {
+      document.getElementById('magazineWriteBtn').hidden = false;
+    }
+  } catch (err) { /* 로그인 안 한 방문자는 무시 */ }
+  await loadMagazinePage();
+})();
+</script>
+</body>
+</html>

@@ -90,55 +90,88 @@ fetch('/content/site.json')
 
     // 메인 배경 사진 슬라이드 (15초마다 자동 전환)
     initHeroSlides(data.hero.images);
-
-    // 매거진 소개(활천 등) — 관리자가 site.json에서 갱신. 이 콜백은 하나의 순차 체인이라
-    // (project_brighteningch-scriptjs-monolithic-then-chain 참고) 여기서 에러가 나도
-    // 앞에서 이미 실행된 예배표·퀵링크·갤러리·히어로슬라이드는 영향받지 않지만, 방어적으로
-    // try/catch로 감싸 향후 이 자리 뒤에 코드가 추가되더라도 안전하게 만든다.
-    try {
-      renderPress(data.press);
-    } catch (err) {
-      console.error('매거진 소개 섹션 렌더링 실패(다른 섹션에는 영향 없음):', err);
-      const pressSection = document.getElementById('press');
-      if (pressSection) pressSection.hidden = true;
-    }
-
   })
   .catch(err => console.error('site.json 로드 실패:', err));
 
-// 매거진 소개(활천 등) 섹션 렌더링. 슬라이드가 하나도 없거나 PDF 파일이 없으면
-// (관리자가 아직 등록 안 했거나 전부 지웠을 때) 섹션 자체를 숨겨 빈 화면이 노출되지 않게 한다.
-function renderPress(press) {
-  const section = document.getElementById('press');
-  if (!section) return;
+// 빛나는 매거진 홈페이지 미리보기: site.json이 아니라 Supabase(magazine_posts)에서 직접
+// 조회하는 완전히 별도의 비동기 흐름이다 — 위 site.json .then() 체인과 절대 섞지 않는다
+// (project_brighteningch-scriptjs-monolithic-then-chain 교훈: 하나의 순차 체인 안에 넣으면
+// 이 조회가 실패했을 때 체인 뒤쪽 코드 전체가 멈출 위험이 있다). 실패해도 홈페이지 나머지
+// 렌더링에는 전혀 영향이 없도록 이 함수 자체가 try/catch로 완전히 감싸져 있다.
+function escMagazine(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-  const hasSlides = press && Array.isArray(press.slides) && press.slides.length > 0;
-  const hasPdf = press && typeof press.pdf_file === 'string' && press.pdf_file.trim() !== '';
-  if (!hasSlides || !hasPdf) {
-    section.hidden = true;
-    return;
-  }
+// '교회뉴스'는 오너가 이름으로 직접 지정한 고정 피처드 카테고리다(자유 카테고리 확장
+// 원칙과 별개인 제품 결정) — 카테고리 목록에 아직 없어도(글이 0건이어도) 항상 큰
+// 영역을 시도하고, 없으면 빈 상태 문구만 보여준다. 나머지 카테고리는 몇 개가 있든
+// 전부(개수 제한 없음) 오른쪽에 최신 글 1건씩 작은 미리보기로 나열한다.
+const MAGAZINE_FEATURED_CATEGORY = '교회뉴스';
 
-  document.getElementById('pressTitle').textContent = press.title || '';
-  document.getElementById('pressDesc').textContent = press.description || '';
-  document.getElementById('pressFeatureCard').href = press.pdf_file;
-
-  const slideshow = document.getElementById('pressSlideshow');
-  slideshow.innerHTML = '';
-  press.slides.forEach((slide, i) => {
-    const img = document.createElement('img');
-    img.className = 'press-slide' + (i === 0 ? ' is-active' : '');
-    img.src = slide.image;
-    img.alt = `${press.title || '매거진 소개'} - ${i + 1}페이지`;
-    slideshow.appendChild(img);
-  });
-
-  section.hidden = false;
-  // initPressSlideshow()는 스크립트 로드 시점에 이미 한 번 호출됐지만, 그때는 슬라이드가
-  // 0개(정적 HTML에 아무것도 없음)라 곧바로 리턴했다 — 방금 슬라이드를 실제로 넣었으니
-  // 자동 전환 타이머를 여기서 다시 설정한다.
-  initPressSlideshow();
+function renderMagazinePostBody(post) {
+  return `
+    <div>
+      <p class="magazine-post-title">${escMagazine(post.title)}</p>
+      <p class="magazine-post-date">${(post.created_at || '').slice(0, 10)}</p>
+    </div>
+    <span class="magazine-post-badge">${post.file_type === 'pdf' ? 'PDF' : '사진'}</span>`;
 }
+
+function renderMagazineFeaturedCard(post) {
+  if (!post) return '<p class="magazine-empty">아직 등록된 글이 없습니다.</p>';
+  const thumb = post.file_type === 'image'
+    ? `<div class="magazine-home-featured-thumb"><img src="${post.file_url}" alt="${escMagazine(post.title)}" loading="lazy"></div>`
+    : `<div class="magazine-home-featured-thumb magazine-home-featured-thumb--pdf">📄</div>`;
+  return `
+    <a class="magazine-post-card magazine-post-card--featured" href="${post.file_url}" target="_blank" rel="noopener">
+      ${thumb}
+      ${renderMagazinePostBody(post)}
+    </a>`;
+}
+
+function renderMagazineOtherItem(category, post) {
+  return `
+    <div class="magazine-home-other-item">
+      <p class="magazine-home-other-cat">${escMagazine(category)}</p>
+      <a class="magazine-post-card" href="${post.file_url}" target="_blank" rel="noopener">
+        ${renderMagazinePostBody(post)}
+      </a>
+    </div>`;
+}
+
+async function loadMagazinePreview() {
+  const featuredEl = document.getElementById('magazine-featured');
+  const othersEl = document.getElementById('magazine-others');
+  const section = document.getElementById('magazine');
+  if (!featuredEl || !othersEl || !section) return;
+
+  try {
+    const categories = await fetchMagazineCategories();
+    const otherCategories = categories.filter(c => c !== MAGAZINE_FEATURED_CATEGORY);
+
+    const featuredPosts = await fetchMagazinePosts(MAGAZINE_FEATURED_CATEGORY);
+    featuredEl.innerHTML = renderMagazineFeaturedCard(featuredPosts[0]);
+
+    if (otherCategories.length === 0) {
+      othersEl.innerHTML = '';
+      return;
+    }
+    const otherResults = await Promise.all(
+      otherCategories.map(async (category) => {
+        const posts = await fetchMagazinePosts(category);
+        return { category, post: posts[0] };
+      })
+    );
+    othersEl.innerHTML = otherResults
+      .filter(r => r.post)
+      .map(r => renderMagazineOtherItem(r.category, r.post))
+      .join('');
+  } catch (err) {
+    console.error('빛나는 매거진 미리보기 로딩 실패(홈페이지 다른 영역에는 영향 없음):', err);
+    featuredEl.innerHTML = '<p class="magazine-empty">아직 등록된 글이 없습니다.</p>';
+    othersEl.innerHTML = '';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(loadMagazinePreview, 400));
 
 // 이미지 자체에 이미 문구가 박혀있는 슬라이드(overlay:false)는 사이트 자체 제목/성구 문구를 숨긴다
 function initHeroSlides(images) {
@@ -189,21 +222,6 @@ function initHeroSlides(images) {
     nextBtn.addEventListener('click', () => { goTo(current + 1); restartTimer(); });
   }
 }
-
-// 활천 매거진 카드: 사진 3장을 5초 간격으로 계속 반복 전환
-function initPressSlideshow() {
-  const wrap = document.getElementById('pressSlideshow');
-  if (!wrap) return;
-  const slides = wrap.querySelectorAll('.press-slide');
-  if (slides.length <= 1) return;
-  let current = 0;
-  setInterval(() => {
-    slides[current].classList.remove('is-active');
-    current = (current + 1) % slides.length;
-    slides[current].classList.add('is-active');
-  }, 5000);
-}
-initPressSlideshow();
 
 // 홈페이지 팝업 3종(이번 주 소식/주일 말씀/잠언 묵상): 모바일에서는 하나씩 순서대로,
 // 데스크톱(769px 이상)에서는 3개를 한 화면에 동시에 띄운다. 쇼츠가 항상 가장 먼저(모바일 순서상 1번째,
