@@ -174,8 +174,10 @@ alter table magazine_posts add constraint magazine_posts_file_type_check
 -- file_size_limit은 버킷 전체에 걸리는 단일 값이라(mime 타입별 개별 제한이 아니다)
 -- PDF·JPG 업로드에도 동일하게 50MB 한도가 적용된다(부작용이 아니라 의도된 상향 —
 -- 스캔된 PDF 매거진도 20MB를 넘길 수 있어 오히려 여유가 생기는 쪽).
+-- ★2026-08-13: PNG 추가(오너 요청) — 지금까지 image/jpeg만 허용해 PNG 업로드가
+-- Storage 서버 단에서 거부되고 있었다.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-  values ('magazine-files', 'magazine-files', true, 52428800, array['application/pdf', 'image/jpeg', 'application/epub+zip'])
+  values ('magazine-files', 'magazine-files', true, 52428800, array['application/pdf', 'image/jpeg', 'image/png', 'application/epub+zip'])
   on conflict (id) do update set
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;

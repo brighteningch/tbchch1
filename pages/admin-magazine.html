@@ -59,7 +59,7 @@
         <textarea id="mg-body" rows="5" placeholder="간단한 소개 문구를 적어주세요."></textarea>
       </label>
       <label id="mg-file-label">파일 (PDF, JPG, EPUB 중 1개)
-        <input type="file" id="mg-file" accept=".pdf,.jpg,.jpeg,.epub,application/pdf,image/jpeg,application/epub+zip">
+        <input type="file" id="mg-file" accept=".pdf,.jpg,.jpeg,.png,.epub,application/pdf,image/jpeg,image/png,application/epub+zip">
       </label>
       <p class="field-hint" id="mg-file-hint">PDF, JPG, EPUB 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다).</p>
       <label>썸네일 페이지 (PDF만 해당)
@@ -298,7 +298,7 @@ let __mgFilterCategory = '';
 function detectFileType(file) {
   const ext = (file.name.split('.').pop() || '').toLowerCase();
   if (file.type === 'application/pdf' || ext === 'pdf') return 'pdf';
-  if (file.type === 'image/jpeg' || ext === 'jpg' || ext === 'jpeg') return 'image';
+  if (file.type === 'image/jpeg' || file.type === 'image/png' || ext === 'jpg' || ext === 'jpeg' || ext === 'png') return 'image';
   if (file.type === 'application/epub+zip' || ext === 'epub') return 'epub';
   return null;
 }
