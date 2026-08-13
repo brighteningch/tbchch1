@@ -309,6 +309,10 @@ body {
   width: 100%; padding: 28px 32px; background: #fff; white-space: pre-wrap;
   line-height: 1.75; font-size: 15px; color: var(--text-dark);
 }
+/* ★2026-08-13(긴급): CDN 차단 등으로 EPUB 리더를 못 불러왔을 때 보여주는 안내 —
+   본문 텍스트와 구분되도록 중앙 정렬+옅은 색으로 톤을 낮춘다. */
+.nm-epub-error { text-align: center; color: var(--text-gray); white-space: normal; }
+.nm-epub-error strong { color: var(--text-dark); }
 /* ★2026-08-13: EPUB 글은 epub.js로 실제 책장 넘기듯 읽는 인앱 리더를 라이트박스 안에
    렌더링한다(오너가 "권장"으로 명시 선택한 방식 — 단순 다운로드 링크 아님). 이전/다음
    페이지 버튼은 리더 위에 떠 있는 원형 버튼으로 배치한다. */

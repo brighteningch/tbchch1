@@ -108,6 +108,59 @@ function nmDownloadUrl(post) {
   return `${post.file_url}${sep}download=${encodeURIComponent(`${post.title}.${ext}`)}`;
 }
 
+// ★2026-08-13(긴급): 오너가 실제 브라우저에서 "EPUB 미리보기가 안 된다"고 반복 신고 —
+// Playwright(깨끗한 자동화 브라우저, 광고차단/캐시 없음)로는 매번 정상 재현됐다. 원인
+// 가설을 실측 재현해보니: cdn.jsdelivr.net(epub.js/JSZip)이 차단되면 window.ePub이
+// undefined인 채로 openNmLightbox 안에서 그냥 `ePub(...)`를 호출해 **uncaught
+// ReferenceError**가 터지고, 그 예외가 바로 아래
+// `document.getElementById('nm-lightbox').hidden = false` 줄 실행을 막아버려서
+// 라이트박스 자체가 아예 안 뜬다(콘솔에러만 남고 사용자 화면은 카드 클릭에 아무 반응도
+// 없는 것처럼 보임) — 이게 신고의 실제 원인일 가능성이 높다. 광고차단·네트워크 문제로
+// CDN을 못 받아오는 상황 자체는 막을 수 없지만, 최소한 "왜 안 되는지 + 대신 뭘 할 수
+// 있는지"는 사용자에게 보여줘야 한다(다운로드 버튼은 CDN과 무관하게 항상 작동).
+let __nmEpubGeneration = 0;
+
+function showEpubLoadError(bodyEl, reason) {
+  console.error('EPUB 리더 로딩 실패:', reason);
+  bodyEl.innerHTML = `
+    <div class="nm-lightbox-textbody nm-epub-error">
+      <p><strong>EPUB 리더를 불러오지 못했습니다.</strong></p>
+      <p>네트워크 상태나 브라우저의 광고 차단 확장 프로그램이 원인일 수 있습니다.
+      위의 "다운로드" 버튼으로 원본 파일을 받아서 확인해주세요.</p>
+    </div>`;
+}
+
+async function loadEpubReader(post, generation) {
+  const bodyEl = document.getElementById('nm-lightbox-body');
+  if (typeof ePub !== 'function') {
+    showEpubLoadError(bodyEl, 'epub.js 라이브러리가 로드되지 않음(CDN 차단 가능성)');
+    return;
+  }
+  const TIMEOUT_MS = 12000;
+  try {
+    await Promise.race([
+      (async () => {
+        __nmEpubBook = ePub(post.file_url);
+        // ★2026-08-13 reviewer(codex) 지적 반영: epub.js 기본값(스크립트 비활성)에
+        // 암묵 의존하지 않고 allowScriptedContent:false를 명시한다(라이브러리 기본값이
+        // 나중에 바뀌어도 안전). 운영 전제: 이 게시판은 관리자 전용 업로드이며, 업로드되는
+        // EPUB은 신뢰된 콘텐츠로 간주한다(악성 EPUB 방어는 라이브러리 sandbox 수준까지만
+        // — 완전한 서버측 zip 파싱+XHTML 스크립트 제거는 이 사이트 규모에 과한
+        // 엔지니어링이라 판단해 하지 않음).
+        const rendition = __nmEpubBook.renderTo('nm-epub-viewport', { width: '100%', height: '100%', allowScriptedContent: false });
+        await rendition.display();
+        if (generation !== __nmEpubGeneration) return; // 그 사이 라이트박스가 닫혔거나 다른 글로 넘어감
+        bodyEl.querySelector('.nm-epub-nav--prev')?.addEventListener('click', () => rendition.prev());
+        bodyEl.querySelector('.nm-epub-nav--next')?.addEventListener('click', () => rendition.next());
+      })(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`EPUB 로딩 타임아웃(${TIMEOUT_MS}ms)`)), TIMEOUT_MS)),
+    ]);
+  } catch (err) {
+    if (generation !== __nmEpubGeneration) return; // 이미 닫혔거나 다른 글로 넘어갔으면 화면을 덮어쓰지 않는다
+    showEpubLoadError(bodyEl, err);
+  }
+}
+
 function openNmLightbox(post) {
   const titleEl = document.getElementById('nm-lightbox-title');
   const linkEl = document.getElementById('nm-lightbox-open-link');
@@ -121,24 +174,17 @@ function openNmLightbox(post) {
   } else if (post.file_type === 'epub') {
     // ★2026-08-13: 오너가 AskUserQuestion으로 명시적으로 선택한 방식 — 단순 다운로드
     // 링크가 아니라 실제 책장 넘기듯 읽는 인앱 리더(epub.js). 페이지 이동은 이전/다음
-    // 원형 버튼으로 제공한다.
+    // 원형 버튼으로 제공한다. 리더 로딩(loadEpubReader)은 실패해도 여기서 절대 throw
+    // 하지 않는 별도 비동기 함수로 분리했다 — 그래야 아래 라이트박스 표시 줄이 항상
+    // 실행된다(수정 전엔 ePub()가 undefined 호출로 여기서 바로 터져서 라이트박스 자체가
+    // 안 뜨는 문제가 있었다).
     bodyEl.innerHTML = `
       <div class="nm-epub-wrap">
         <div id="nm-epub-viewport" class="nm-epub-viewport"></div>
         <button type="button" class="nm-epub-nav nm-epub-nav--prev" aria-label="이전 페이지">‹</button>
         <button type="button" class="nm-epub-nav nm-epub-nav--next" aria-label="다음 페이지">›</button>
       </div>`;
-    __nmEpubBook = ePub(post.file_url);
-    // ★2026-08-13 reviewer(codex) 지적 반영: epub.js 기본값(스크립트 비활성)에 암묵
-    // 의존하지 않고 allowScriptedContent:false를 명시한다(라이브러리 기본값이 나중에
-    // 바뀌어도 안전). 운영 전제: 이 게시판은 관리자 전용 업로드이며, 업로드되는 EPUB은
-    // 신뢰된 콘텐츠로 간주한다(악성 EPUB 방어는 라이브러리 sandbox 수준까지만 —
-    // 완전한 서버측 zip 파싱+XHTML 스크립트 제거는 이 사이트 규모에 과한 엔지니어링이라
-    // 판단해 하지 않음).
-    const rendition = __nmEpubBook.renderTo('nm-epub-viewport', { width: '100%', height: '100%', allowScriptedContent: false });
-    rendition.display();
-    bodyEl.querySelector('.nm-epub-nav--prev').addEventListener('click', () => rendition.prev());
-    bodyEl.querySelector('.nm-epub-nav--next').addEventListener('click', () => rendition.next());
+    loadEpubReader(post, ++__nmEpubGeneration);
   } else {
     bodyEl.innerHTML = `<iframe src="${post.file_url}" title="${escHtml(post.title)}"></iframe>`;
   }
@@ -147,6 +193,7 @@ function openNmLightbox(post) {
 }
 
 function closeNmLightbox() {
+  __nmEpubGeneration++; // 진행 중인 loadEpubReader가 있다면 결과를 무시하게 한다
   document.getElementById('nm-lightbox').hidden = true;
   document.body.style.overflow = '';
   if (__nmEpubBook) {
