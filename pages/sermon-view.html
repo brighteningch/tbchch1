@@ -28,6 +28,7 @@
         <p><strong>날짜</strong> <span id="sermonDate"></span></p>
       </div>
       <div class="sermon-view-body" id="sermonBody"></div>
+      <div class="sermon-image-grid" id="sermonImageGrid" hidden></div>
       <div class="sermon-form-actions" style="margin-top:20px;">
         <a href="#" class="btn btn-ghost" id="sermonEditBtn" hidden>수정</a>
         <button type="button" class="btn btn-ghost" id="sermonDeleteBtn" hidden>삭제</button>
@@ -37,6 +38,19 @@
       <h3>목록</h3>
       <ul id="sermonSideList"></ul>
     </aside>
+  </div>
+</div>
+
+<div class="photo-lightbox" id="photoLightbox" hidden>
+  <div class="lightbox-header">
+    <div>
+      <p class="lightbox-title" id="lightboxTitle"></p>
+      <p class="lightbox-sub" id="lightboxSub"></p>
+    </div>
+    <button class="lightbox-close" id="lightboxClose" aria-label="닫기">✕</button>
+  </div>
+  <div class="lightbox-body">
+    <div class="lightbox-grid" id="lightboxGrid"></div>
   </div>
 </div>
 
@@ -84,6 +98,31 @@ const idParam = params.get('id') || '';
     document.getElementById('sermonDate').textContent = (current.date || '').slice(0, 10);
     document.getElementById('sermonBody').innerHTML = (current.body || '')
       .split('\n').map(l => escHtml(l)).join('<br>');
+
+    // 첨부사진(있을 때만 표시 — 기존에 사진 없이 등록된 글은 이 섹션 자체가 안 보여 회귀 없음)
+    try {
+      const images = await fetchSermonImages(current.id);
+      if (images.length > 0) {
+        const grid = document.getElementById('sermonImageGrid');
+        grid.hidden = false;
+        grid.innerHTML = images.map((img, i) =>
+          `<button type="button" class="sermon-image-thumb" data-img-index="${i}"><img src="${img.image_url}" alt="${escHtml(current.title)} 첨부사진" loading="lazy"></button>`
+        ).join('');
+        grid.querySelectorAll('[data-img-index]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const box = document.getElementById('photoLightbox');
+            document.getElementById('lightboxTitle').textContent = current.title || '';
+            document.getElementById('lightboxSub').textContent = `사진 ${images.length}장`;
+            const lgGrid = document.getElementById('lightboxGrid');
+            lgGrid.className = 'lightbox-grid lightbox-grid--stack';
+            lgGrid.innerHTML = images.map(img => `<img src="${img.image_url}" alt="${escHtml(current.title)}">`).join('');
+            box.hidden = false;
+          });
+        });
+      }
+    } catch (imgErr) {
+      console.error('설교 첨부사진을 불러오지 못했습니다:', imgErr);
+    }
 
     const embedUrl = youtubeEmbedUrl(current.video_url);
     const videoWrap = document.getElementById('sermonVideoWrap');
