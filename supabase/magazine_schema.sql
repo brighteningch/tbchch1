@@ -86,3 +86,96 @@ drop policy if exists "app_settings admin write" on app_settings;
 create policy "app_settings admin write" on app_settings for insert with check (is_admin());
 drop policy if exists "app_settings admin update" on app_settings;
 create policy "app_settings admin update" on app_settings for update using (is_admin());
+
+-- ★2026-08-13: 오너 요청 — 교회학교(어린이)/청청(청소년&청년) 페이지에도 '빛나는 매거진'과
+-- 같은 방식(관리자 전용 글쓰기, 카테고리 섹션+라이트박스)의 게시판을 추가한다. 새 테이블을
+-- 만드는 대신 magazine_posts를 board 컬럼으로 나눠 재사용한다 — community_posts가 이미
+-- 검증한 것과 같은 패턴(supabase-schema.sql의 `board text not null default 'community-home'`)
+-- 이다. 기본값 'magazine'이라 기존 행 전부 자동 소급되어 '빛나는 매거진' 기존 동작에는
+-- 영향이 없다. board는 카테고리와 마찬가지로 자유 텍스트(enum 제약 없음) — 새 게시판이
+-- 더 늘어나도 스키마 변경 없이 board 값만 늘리면 된다. RLS는 이미 board와 무관하게
+-- 전체공개읽기/admin전용쓰기라 신규 정책이 필요 없다(community_posts와 달리 board별
+-- read 예외가 아예 없는 더 단순한 케이스).
+alter table magazine_posts add column if not exists board text not null default 'magazine';
+
+-- 교회학교/청청 게시판은 파일 첨부가 선택사항이어야 한다(오너 확정 — 제목+본문만으로도
+-- 글쓰기 가능). 반면 '빛나는 매거진'은 계속 파일이 필수여야 한다(기존 동작 유지). 클라이언트
+-- 폼 검증만으로는 우회 가능한 UX 힌트일 뿐이므로(이 프로젝트의 기존 원칙 — 위
+-- allowed_mime_types 주석 참고), DB 체크 제약으로 진짜 방어선을 만든다: board가
+-- 'magazine'이면 반드시 file_url이 있어야 한다.
+-- ★2026-08-13 reviewer(codex) 1차 지적으로 발견: 최초 버전은 `file_url is not null`만
+-- 검사해서, file_url이 빈 문자열('')이거나 file_type이 NULL이어도 통과하는 구멍이
+-- 있었다(SQL CHECK는 NULL 비교가 섞여 UNKNOWN이 되면 실패로 안 치고 통과시켜버리는
+-- 함정). ★2026-08-13 reviewer(codex) 2차 지적: 1차 수정 후에도 board가 magazine이
+-- 아닌 글(교회학교/청청)은 이 제약을 아예 안 타서, file_url은 있는데 file_type은
+-- NULL인 앞뒤가 안 맞는 행이 여전히 통과할 수 있었다. board와 무관하게 항상 성립해야
+-- 하는 "file_url·file_type은 항상 같이 있거나 같이 없어야 한다"는 제약을 별도로 분리해
+-- 전체 행에 적용하고, "magazine이면 파일이 아예 없으면 안 된다"는 board 전용 제약은
+-- 따로 둔다 — 두 제약을 합치면 magazine 글은 파일 필수+file_url/file_type 정합성이
+-- 둘 다 보장되고, 다른 게시판 글은 파일이 아예 없거나(둘 다 NULL) 완전히 정상인
+-- 파일(둘 다 채워짐)만 허용되어 어중간한 상태가 나올 수 없다.
+alter table magazine_posts alter column file_url drop not null;
+alter table magazine_posts alter column file_type drop not null;
+
+alter table magazine_posts drop constraint if exists magazine_posts_file_url_type_consistency;
+alter table magazine_posts add constraint magazine_posts_file_url_type_consistency
+  check (
+    (file_url is null and file_type is null)
+    or (
+      file_url is not null and length(trim(file_url)) > 0
+      and file_type is not null and file_type in ('pdf', 'image', 'epub')
+    )
+  );
+
+alter table magazine_posts drop constraint if exists magazine_posts_magazine_requires_file;
+alter table magazine_posts add constraint magazine_posts_magazine_requires_file
+  check (board <> 'magazine' or file_url is not null);
+
+-- ★2026-08-13: 오너 요청 — PDF/JPG만 되던 업로드에 EPUB도 추가한다(브라우저 안에서 실제
+-- 책장 넘기듯 읽는 인앱 리더 제공, admin-magazine.html+news-magazine.html 참고). EPUB의
+-- 공식 mime type은 application/epub+zip이다(IANA 공식 등록 확인:
+-- https://www.iana.org/assignments/media-types/application/epub+zip, W3C EPUB 3
+-- 스펙 참조 — 추측 아닌 실측 확인).
+--
+-- file_type check 제약은 원래 create table 안에 이름 없이 선언돼 있어서(PostgreSQL이
+-- <테이블>_<컬럼>_check로 자동 명명, 이미 배포된 테이블이라 실제 이름을 직접 조회할
+-- 수단이 없다), 이름을 추측해서 drop하는 대신 DO 블록으로 file_type 관련 check 제약을
+-- 전부 찾아 실제로 지운다 — 이름 추측이 틀리면 옛 제약이 조용히 안 지워진 채 남아서
+-- epub 업로드가 계속 막히는데 원인을 찾기 어려워지는 실패 모드를 원천 차단한다.
+-- ★주의(직접 발견·수정, 위 magazine_posts_file_url_type_consistency 분리 후 재확인):
+-- 이 패턴이 'file_type'을 포함하는 제약을 전부 잡다 보니, 위에서 만든
+-- magazine_posts_file_url_type_consistency(file_type+file_url 둘 다 언급, board는
+-- 언급 안 함)와 magazine_posts_magazine_requires_file(board만 언급, file_type은
+-- 이제 언급 안 함)이 잘못 걸릴 위험이 있다 — 'board' 또는 'file_url'을 언급하는
+-- 제약은 전부 제외해서, 순수 file_type 단독 체크(원래 이름없는 제약과
+-- magazine_posts_file_type_check)만 지우도록 좁힌다.
+do $$
+declare
+  con record;
+begin
+  for con in
+    select conname from pg_constraint
+    where conrelid = 'magazine_posts'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%file_type%'
+      and pg_get_constraintdef(oid) not ilike '%board%'
+      and pg_get_constraintdef(oid) not ilike '%file_url%'
+  loop
+    execute format('alter table magazine_posts drop constraint %I', con.conname);
+  end loop;
+end $$;
+alter table magazine_posts add constraint magazine_posts_file_type_check
+  check (file_type in ('pdf', 'image', 'epub'));
+
+-- Storage 버킷도 epub을 허용 목록에 추가한다. 파일 크기 제한은 PDF 기준 20MB였는데,
+-- EPUB은 삽화가 많은 교회학교용 자료의 경우 훨씬 커질 수 있다 — 업계 사례 조사
+-- (Amazon KDP 650MB, Apple Books 2GB, IngramSpark 100MB, 삽화 많은 책 전용
+-- NetGalley Shelf 250MB)를 근거로 50MB로 상향한다. ★주의: Supabase Storage의
+-- file_size_limit은 버킷 전체에 걸리는 단일 값이라(mime 타입별 개별 제한이 아니다)
+-- PDF·JPG 업로드에도 동일하게 50MB 한도가 적용된다(부작용이 아니라 의도된 상향 —
+-- 스캔된 PDF 매거진도 20MB를 넘길 수 있어 오히려 여유가 생기는 쪽).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('magazine-files', 'magazine-files', true, 52428800, array['application/pdf', 'image/jpeg', 'application/epub+zip'])
+  on conflict (id) do update set
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;

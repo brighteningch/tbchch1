@@ -21,11 +21,256 @@
   <p>빛나는교회 청청(청소년&amp;청년부)은 <strong>매주 주일 오전 10:20</strong>에 예배드립니다. 다음세대 청소년·청년들이 신앙 안에서 함께 성장하는 공동체입니다.</p>
 </div>
 
+<div class="page-body" style="max-width:1100px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <h2 class="section-title" style="margin:0;">게시판</h2>
+    <a href="/pages/admin-magazine.html?board=next-youth" class="btn btn-primary btn-sm" id="boardWriteBtn" hidden>글쓰기</a>
+  </div>
+
+  <div class="magazine-layout">
+    <div class="magazine-sidebar">
+      <div class="magazine-cat-list" id="nm-cat-list"></div>
+    </div>
+    <div class="magazine-main">
+      <div id="nm-sections"></div>
+      <p class="magazine-empty" id="nm-empty" hidden>아직 등록된 글이 없습니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="nm-lightbox" id="nm-lightbox" hidden>
+  <div class="nm-lightbox-backdrop" id="nm-lightbox-backdrop"></div>
+  <div class="nm-lightbox-box" role="dialog" aria-modal="true" aria-labelledby="nm-lightbox-title">
+    <div class="nm-lightbox-header">
+      <p class="nm-lightbox-title" id="nm-lightbox-title"></p>
+      <div class="nm-lightbox-actions">
+        <a class="nm-lightbox-download-link" id="nm-lightbox-download-link" href="#" download>다운로드 ⬇</a>
+        <a class="nm-lightbox-open-link" id="nm-lightbox-open-link" href="#" target="_blank" rel="noopener">새 탭에서 원본 열기 ↗</a>
+        <button type="button" class="nm-lightbox-close" id="nm-lightbox-close" aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="nm-lightbox-body" id="nm-lightbox-body"></div>
+  </div>
+</div>
+
 <div id="footerHost"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/supabase-config.js"></script>
 <script src="/member-auth.js"></script>
+<script src="/magazine-data.js"></script>
 <script src="/common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js" integrity="sha384-ZqmkDa/1AGF4SKdSmXgEG+3G+Gsb6yNqUSq2Mqp0jDf1GWk+UY5eNbEd7hgwiywI" crossorigin="anonymous"></script>
+<script>
+// news-magazine.html의 카테고리 섹션 스크롤+라이트박스 구조를 board='next-youth'
+// 필터만 다르게 해서 그대로 재사용한다(이 프로젝트의 기존 컨벤션 — 페이지마다 독립
+// 인라인 스크립트, 공유 뷰 모듈 없음 — 을 그대로 따름). '교회뉴스 섹션 상단고정'은
+// 매거진 게시판 전용 특수 규칙이라 여기에는 없다.
+const BOARD = 'next-youth';
+
+function escHtml(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+// 파일이 없는 글(제목+본문만)은 썸네일 자리에 본문 앞부분 텍스트 미리보기를 보여준다.
+function nmThumbHtml(post) {
+  if (post.file_type === 'image') {
+    return `<div class="magazine-nm-card-thumb"><img src="${post.file_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`;
+  }
+  if (post.file_type === 'pdf') {
+    return post.thumbnail_url
+      ? `<div class="magazine-nm-card-thumb"><img src="${post.thumbnail_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`
+      : `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📄</div>`;
+  }
+  if (post.file_type === 'epub') {
+    // ★2026-08-13: EPUB 표지 이미지 추출은 이 티켓 범위 밖(오너 확정) — 책 아이콘 폴백만.
+    return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📖</div>`;
+  }
+  const preview = (post.body || '').trim();
+  if (preview) {
+    return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--text"><p>${escHtml(preview.slice(0, 80))}${preview.length > 80 ? '…' : ''}</p></div>`;
+  }
+  return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📝</div>`;
+}
+
+function nmCardHtml(post) {
+  const badge = post.file_type === 'pdf' ? 'PDF' : post.file_type === 'image' ? '사진' : post.file_type === 'epub' ? 'EPUB' : '글';
+  return `
+    <button type="button" class="magazine-nm-card" data-post-id="${post.id}">
+      ${nmThumbHtml(post)}
+      <div class="magazine-nm-card-body">
+        <p class="magazine-post-title">${escHtml(post.title)}</p>
+        <p class="magazine-post-date">${(post.created_at || '').slice(0, 10)}</p>
+        <span class="magazine-post-badge">${badge}</span>
+      </div>
+    </button>`;
+}
+
+let __nmPostsById = new Map();
+let __nmEpubBook = null; // 열려 있는 동안만 유지, 닫을 때 destroy() — epub.js Book 인스턴스는 재사용하지 않고 매번 새로 연다.
+
+// ★2026-08-13: 오너 요청 — 새 탭 보기와 별개로 실제 파일 다운로드가 보장돼야 한다
+// (특히 EPUB은 브라우저가 그냥 열면 인식 못할 수 있어 원본 다운로드 경로가 꼭 필요).
+// Supabase Storage의 ?download 쿼리파라미터가 서버에서 진짜 Content-Disposition:
+// attachment 헤더를 내려주는 걸 curl로 실측 확인한 뒤 이 방식을 썼다 — <a download>
+// 속성만으로는 file_url이 다른 오리진(Supabase Storage)이라 브라우저가 무시할 수
+// 있어 신뢰할 수 없다.
+function nmDownloadUrl(post) {
+  const ext = post.file_type === 'pdf' ? 'pdf' : post.file_type === 'epub' ? 'epub' : 'jpg';
+  const sep = post.file_url.includes('?') ? '&' : '?';
+  return `${post.file_url}${sep}download=${encodeURIComponent(`${post.title}.${ext}`)}`;
+}
+
+function openNmLightbox(post) {
+  const titleEl = document.getElementById('nm-lightbox-title');
+  const linkEl = document.getElementById('nm-lightbox-open-link');
+  const downloadEl = document.getElementById('nm-lightbox-download-link');
+  const bodyEl = document.getElementById('nm-lightbox-body');
+  titleEl.textContent = post.title;
+  if (!post.file_url) {
+    downloadEl.hidden = true;
+    linkEl.hidden = true;
+    bodyEl.innerHTML = `<div class="nm-lightbox-textbody">${escHtml(post.body || '')}</div>`;
+  } else if (post.file_type === 'image') {
+    linkEl.hidden = false;
+    linkEl.href = post.file_url;
+    downloadEl.hidden = false;
+    downloadEl.href = nmDownloadUrl(post);
+    bodyEl.innerHTML = `<img src="${post.file_url}" alt="${escHtml(post.title)}">`;
+  } else if (post.file_type === 'epub') {
+    // ★2026-08-13: 오너가 AskUserQuestion으로 명시적으로 선택한 방식 — 단순 다운로드
+    // 링크가 아니라 실제 책장 넘기듯 읽는 인앱 리더(epub.js).
+    linkEl.hidden = false;
+    linkEl.href = post.file_url;
+    downloadEl.hidden = false;
+    downloadEl.href = nmDownloadUrl(post);
+    bodyEl.innerHTML = `
+      <div class="nm-epub-wrap">
+        <div id="nm-epub-viewport" class="nm-epub-viewport"></div>
+        <button type="button" class="nm-epub-nav nm-epub-nav--prev" aria-label="이전 페이지">‹</button>
+        <button type="button" class="nm-epub-nav nm-epub-nav--next" aria-label="다음 페이지">›</button>
+      </div>`;
+    __nmEpubBook = ePub(post.file_url);
+    // ★2026-08-13 reviewer(codex) 지적 반영: epub.js 기본값(스크립트 비활성)에 암묵
+    // 의존하지 않고 allowScriptedContent:false를 명시한다(라이브러리 기본값이 나중에
+    // 바뀌어도 안전). 운영 전제: 이 게시판은 관리자 전용 업로드이며, 업로드되는 EPUB은
+    // 신뢰된 콘텐츠로 간주한다(악성 EPUB 방어는 라이브러리 sandbox 수준까지만 —
+    // 완전한 서버측 zip 파싱+XHTML 스크립트 제거는 이 사이트 규모에 과한 엔지니어링이라
+    // 판단해 하지 않음).
+    const rendition = __nmEpubBook.renderTo('nm-epub-viewport', { width: '100%', height: '100%', allowScriptedContent: false });
+    rendition.display();
+    bodyEl.querySelector('.nm-epub-nav--prev').addEventListener('click', () => rendition.prev());
+    bodyEl.querySelector('.nm-epub-nav--next').addEventListener('click', () => rendition.next());
+  } else {
+    linkEl.hidden = false;
+    linkEl.href = post.file_url;
+    downloadEl.hidden = false;
+    downloadEl.href = nmDownloadUrl(post);
+    bodyEl.innerHTML = `<iframe src="${post.file_url}" title="${escHtml(post.title)}"></iframe>`;
+  }
+  document.getElementById('nm-lightbox').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeNmLightbox() {
+  document.getElementById('nm-lightbox').hidden = true;
+  document.body.style.overflow = '';
+  if (__nmEpubBook) {
+    try { __nmEpubBook.destroy(); } catch (err) { /* 이미 정리된 상태면 무시 */ }
+    __nmEpubBook = null;
+  }
+  document.getElementById('nm-lightbox-body').innerHTML = '';
+}
+
+document.getElementById('nm-lightbox-backdrop').addEventListener('click', closeNmLightbox);
+document.getElementById('nm-lightbox-close').addEventListener('click', closeNmLightbox);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('nm-lightbox').hidden) closeNmLightbox();
+});
+
+let __nmObserver = null;
+
+async function loadBoardPage() {
+  const catListEl = document.getElementById('nm-cat-list');
+  const sectionsEl = document.getElementById('nm-sections');
+  const emptyEl = document.getElementById('nm-empty');
+  try {
+    const posts = await fetchMagazinePosts(undefined, BOARD);
+    if (posts.length === 0) {
+      catListEl.innerHTML = '';
+      sectionsEl.innerHTML = '';
+      emptyEl.hidden = false;
+      return;
+    }
+    emptyEl.hidden = true;
+
+    const grouped = new Map();
+    posts.forEach(p => {
+      if (!grouped.has(p.category)) grouped.set(p.category, []);
+      grouped.get(p.category).push(p);
+    });
+    const categories = Array.from(grouped.keys());
+
+    __nmPostsById = new Map(posts.map(p => [String(p.id), p]));
+
+    catListEl.innerHTML = categories.map((c, i) => `
+      <a href="#nm-section-${i}" class="magazine-cat-btn" data-index="${i}">${escHtml(c)}</a>`).join('');
+
+    sectionsEl.innerHTML = categories.map((c, i) => `
+      <section class="magazine-nm-section" id="nm-section-${i}">
+        <div class="magazine-nm-section-head">
+          <h2 class="magazine-nm-section-title">${escHtml(c)}</h2>
+          <span class="magazine-nm-section-count">${grouped.get(c).length}건</span>
+        </div>
+        <div class="magazine-nm-grid">
+          ${grouped.get(c).map(nmCardHtml).join('')}
+        </div>
+      </section>`).join('');
+
+    sectionsEl.querySelectorAll('[data-post-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const post = __nmPostsById.get(btn.dataset.postId);
+        if (post) openNmLightbox(post);
+      });
+    });
+
+    if (__nmObserver) __nmObserver.disconnect();
+    __nmObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const idx = entry.target.id.replace('nm-section-', '');
+        document.querySelectorAll('#nm-cat-list .magazine-cat-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.index === idx);
+        });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('.magazine-nm-section').forEach(el => __nmObserver.observe(el));
+    if (categories.length > 0) {
+      document.querySelector('#nm-cat-list .magazine-cat-btn').classList.add('active');
+    }
+
+    window.addEventListener('scroll', () => {
+      const nearBottom = window.scrollY + window.innerHeight >= document.body.scrollHeight - 4;
+      if (!nearBottom) return;
+      const btns = document.querySelectorAll('#nm-cat-list .magazine-cat-btn');
+      btns.forEach((btn, i) => btn.classList.toggle('active', i === btns.length - 1));
+    }, { passive: true });
+  } catch (err) {
+    console.error('게시판 목록 로드 실패:', err);
+    catListEl.innerHTML = '';
+    sectionsEl.innerHTML = '';
+    emptyEl.hidden = false;
+  }
+}
+
+(async function () {
+  try {
+    const profile = await getCurrentProfile();
+    if (profile && profile.is_admin) {
+      document.getElementById('boardWriteBtn').hidden = false;
+    }
+  } catch (err) { /* 로그인 안 한 방문자는 무시 */ }
+  await loadBoardPage();
+})();
+</script>
 
 </body>
 </html>

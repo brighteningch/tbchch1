@@ -39,6 +39,7 @@
     <div class="nm-lightbox-header">
       <p class="nm-lightbox-title" id="nm-lightbox-title"></p>
       <div class="nm-lightbox-actions">
+        <a class="nm-lightbox-download-link" id="nm-lightbox-download-link" href="#" download>다운로드 ⬇</a>
         <a class="nm-lightbox-open-link" id="nm-lightbox-open-link" href="#" target="_blank" rel="noopener">새 탭에서 원본 열기 ↗</a>
         <button type="button" class="nm-lightbox-close" id="nm-lightbox-close" aria-label="닫기">✕</button>
       </div>
@@ -53,6 +54,8 @@
 <script src="/member-auth.js"></script>
 <script src="/magazine-data.js"></script>
 <script src="/common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js" integrity="sha384-ZqmkDa/1AGF4SKdSmXgEG+3G+Gsb6yNqUSq2Mqp0jDf1GWk+UY5eNbEd7hgwiywI" crossorigin="anonymous"></script>
 <script>
 function escHtml(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
@@ -63,39 +66,82 @@ function nmThumbHtml(post) {
   if (post.file_type === 'image') {
     return `<div class="magazine-nm-card-thumb"><img src="${post.file_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`;
   }
-  if (post.thumbnail_url) {
-    return `<div class="magazine-nm-card-thumb"><img src="${post.thumbnail_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`;
+  if (post.file_type === 'pdf') {
+    return post.thumbnail_url
+      ? `<div class="magazine-nm-card-thumb"><img src="${post.thumbnail_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`
+      : `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📄</div>`;
   }
-  return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📄</div>`;
+  // ★2026-08-13: EPUB 표지 이미지 추출은 이 티켓 범위 밖(오너 확정) — 📄(PDF)와 구분되는
+  // 책 아이콘 폴백만 보여준다.
+  return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📖</div>`;
 }
 
 // 카드는 더 이상 새 탭으로 나가는 <a>가 아니라 페이지 안에서 라이트박스를 여는
 // <button>이다(실제 이동이 아니라 인페이지 확대이므로 시맨틱상 이게 맞다). 원본으로
 // 나가는 진짜 링크는 라이트박스 안의 "새 탭에서 원본 열기"가 담당한다.
 function nmCardHtml(post) {
+  const badge = post.file_type === 'pdf' ? 'PDF' : post.file_type === 'epub' ? 'EPUB' : '사진';
   return `
     <button type="button" class="magazine-nm-card" data-post-id="${post.id}">
       ${nmThumbHtml(post)}
       <div class="magazine-nm-card-body">
         <p class="magazine-post-title">${escHtml(post.title)}</p>
         <p class="magazine-post-date">${(post.created_at || '').slice(0, 10)}</p>
-        <span class="magazine-post-badge">${post.file_type === 'pdf' ? 'PDF' : '사진'}</span>
+        <span class="magazine-post-badge">${badge}</span>
       </div>
     </button>`;
 }
 
 // ---------- 라이트박스: 카드 클릭 시 새 탭 대신 페이지 안에서 확대 표시 ----------
 let __nmPostsById = new Map();
+let __nmEpubBook = null; // 열려 있는 동안만 유지, 닫을 때 destroy() — epub.js Book 인스턴스는 재사용하지 않고 매번 새로 연다.
+
+// ★2026-08-13: 오너 요청 — 새 탭 보기와 별개로 실제 파일 다운로드가 보장돼야 한다
+// (특히 EPUB은 브라우저가 그냥 열면 인식 못 할 수 있어 원본 다운로드 경로가 꼭 필요).
+// Supabase Storage의 ?download 쿼리파라미터가 서버에서 진짜 Content-Disposition:
+// attachment 헤더를 내려주는 걸 curl로 실측 확인한 뒤 이 방식을 썼다 — <a download>
+// 속성만으로는 file_url이 다른 오리진(Supabase Storage)이라 브라우저가 무시할 수
+// 있어 신뢰할 수 없다.
+function nmDownloadUrl(post) {
+  const ext = post.file_type === 'pdf' ? 'pdf' : post.file_type === 'epub' ? 'epub' : 'jpg';
+  const sep = post.file_url.includes('?') ? '&' : '?';
+  return `${post.file_url}${sep}download=${encodeURIComponent(`${post.title}.${ext}`)}`;
+}
 
 function openNmLightbox(post) {
   const titleEl = document.getElementById('nm-lightbox-title');
   const linkEl = document.getElementById('nm-lightbox-open-link');
+  const downloadEl = document.getElementById('nm-lightbox-download-link');
   const bodyEl = document.getElementById('nm-lightbox-body');
   titleEl.textContent = post.title;
   linkEl.href = post.file_url;
-  bodyEl.innerHTML = post.file_type === 'image'
-    ? `<img src="${post.file_url}" alt="${escHtml(post.title)}">`
-    : `<iframe src="${post.file_url}" title="${escHtml(post.title)}"></iframe>`;
+  downloadEl.href = nmDownloadUrl(post);
+  if (post.file_type === 'image') {
+    bodyEl.innerHTML = `<img src="${post.file_url}" alt="${escHtml(post.title)}">`;
+  } else if (post.file_type === 'epub') {
+    // ★2026-08-13: 오너가 AskUserQuestion으로 명시적으로 선택한 방식 — 단순 다운로드
+    // 링크가 아니라 실제 책장 넘기듯 읽는 인앱 리더(epub.js). 페이지 이동은 이전/다음
+    // 원형 버튼으로 제공한다.
+    bodyEl.innerHTML = `
+      <div class="nm-epub-wrap">
+        <div id="nm-epub-viewport" class="nm-epub-viewport"></div>
+        <button type="button" class="nm-epub-nav nm-epub-nav--prev" aria-label="이전 페이지">‹</button>
+        <button type="button" class="nm-epub-nav nm-epub-nav--next" aria-label="다음 페이지">›</button>
+      </div>`;
+    __nmEpubBook = ePub(post.file_url);
+    // ★2026-08-13 reviewer(codex) 지적 반영: epub.js 기본값(스크립트 비활성)에 암묵
+    // 의존하지 않고 allowScriptedContent:false를 명시한다(라이브러리 기본값이 나중에
+    // 바뀌어도 안전). 운영 전제: 이 게시판은 관리자 전용 업로드이며, 업로드되는 EPUB은
+    // 신뢰된 콘텐츠로 간주한다(악성 EPUB 방어는 라이브러리 sandbox 수준까지만 —
+    // 완전한 서버측 zip 파싱+XHTML 스크립트 제거는 이 사이트 규모에 과한 엔지니어링이라
+    // 판단해 하지 않음).
+    const rendition = __nmEpubBook.renderTo('nm-epub-viewport', { width: '100%', height: '100%', allowScriptedContent: false });
+    rendition.display();
+    bodyEl.querySelector('.nm-epub-nav--prev').addEventListener('click', () => rendition.prev());
+    bodyEl.querySelector('.nm-epub-nav--next').addEventListener('click', () => rendition.next());
+  } else {
+    bodyEl.innerHTML = `<iframe src="${post.file_url}" title="${escHtml(post.title)}"></iframe>`;
+  }
   document.getElementById('nm-lightbox').hidden = false;
   document.body.style.overflow = 'hidden';
 }
@@ -103,6 +149,10 @@ function openNmLightbox(post) {
 function closeNmLightbox() {
   document.getElementById('nm-lightbox').hidden = true;
   document.body.style.overflow = '';
+  if (__nmEpubBook) {
+    try { __nmEpubBook.destroy(); } catch (err) { /* 이미 정리된 상태면 무시 */ }
+    __nmEpubBook = null;
+  }
   // 닫을 때 iframe/img src를 비워 PDF 뷰어·이미지 로딩을 확실히 중단시킨다.
   document.getElementById('nm-lightbox-body').innerHTML = '';
 }
