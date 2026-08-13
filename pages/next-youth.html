@@ -6,6 +6,10 @@
 <title>청청(청소년&청년) · 빛나는교회</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
 <link rel="stylesheet" href="/style.css">
+<style>
+  .nc-image-previews { display: flex; gap: 8px; flex-wrap: wrap; margin-top: -8px; }
+  .nc-image-previews img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; display: block; }
+</style>
 </head>
 <body>
 <div id="headerHost"></div>
@@ -24,8 +28,36 @@
 <div class="page-body" style="max-width:1100px;">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
     <h2 class="section-title" style="margin:0;">게시판</h2>
-    <a href="/pages/admin-magazine.html?board=next-youth" class="btn btn-primary btn-sm" id="boardWriteBtn" hidden>글쓰기</a>
+    <a href="/pages/admin-magazine.html?board=next-youth" class="btn btn-primary btn-sm" id="boardWriteBtn" hidden>글쓰기(관리자·PDF/EPUB)</a>
   </div>
+
+  <div id="ncWriteGuard" class="admin-guard" hidden>
+    <p>로그인 후 글을 쓸 수 있습니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <form id="ncWriteForm" class="sermon-form" hidden style="margin-bottom:32px; max-width:640px;">
+    <label>카테고리
+      <input type="text" id="nc-category" list="nc-category-list" required placeholder="예: 공지사항, 교육자료, 사진 (기존 목록에서 고르거나 새로 입력)">
+      <datalist id="nc-category-list"></datalist>
+    </label>
+    <label>제목
+      <input type="text" id="nc-title" required>
+    </label>
+    <label>내용
+      <textarea id="nc-body" rows="6" required placeholder="자유롭게 적어주세요."></textarea>
+    </label>
+    <label>사진 (선택, 최대 6장 · JPG/PNG만)
+      <input type="file" id="nc-images" accept="image/jpeg,image/png" multiple>
+    </label>
+    <div id="nc-image-previews" class="nc-image-previews"></div>
+    <p class="field-hint" id="nc-edit-hint" hidden>수정 시 새 사진을 고르면 기존 사진 전체가 새로 고른 사진으로 교체됩니다. 사진을 고르지 않으면 기존 사진이 그대로 유지됩니다.</p>
+    <div class="sermon-form-actions">
+      <button type="submit" class="btn btn-primary" id="nc-submit-btn">글 등록</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="nc-cancel-edit-btn" hidden>취소</button>
+    </div>
+    <p class="auth-error" id="nc-error" hidden></p>
+  </form>
 
   <div class="magazine-layout">
     <div class="magazine-sidebar">
@@ -46,6 +78,8 @@
       <div class="nm-lightbox-actions">
         <a class="nm-lightbox-download-link" id="nm-lightbox-download-link" href="#" download>다운로드 ⬇</a>
         <a class="nm-lightbox-open-link" id="nm-lightbox-open-link" href="#" target="_blank" rel="noopener">새 탭에서 원본 열기 ↗</a>
+        <button type="button" class="btn btn-ghost btn-sm" id="nm-lightbox-edit" hidden>수정</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="nm-lightbox-delete" hidden>삭제</button>
         <button type="button" class="nm-lightbox-close" id="nm-lightbox-close" aria-label="닫기">✕</button>
       </div>
     </div>
@@ -67,10 +101,14 @@
 // 인라인 스크립트, 공유 뷰 모듈 없음 — 을 그대로 따름). '교회뉴스 섹션 상단고정'은
 // 매거진 게시판 전용 특수 규칙이라 여기에는 없다.
 const BOARD = 'next-youth';
+const NC_IMAGE_BUCKET = 'magazine-post-images';
+const NC_MAX_IMAGES = 6;
+const NC_ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
 
 function escHtml(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-// 파일이 없는 글(제목+본문만)은 썸네일 자리에 본문 앞부분 텍스트 미리보기를 보여준다.
+// 파일이 없는 글(제목+본문만, 회원이 이 페이지에서 직접 쓴 글)은 magazine_post_images로
+// 붙인 사진이 있으면 첫 장을 썸네일로, 없으면 본문 앞부분 텍스트 미리보기를 보여준다.
 function nmThumbHtml(post) {
   if (post.file_type === 'image') {
     return `<div class="magazine-nm-card-thumb"><img src="${post.file_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`;
@@ -79,6 +117,9 @@ function nmThumbHtml(post) {
     return post.thumbnail_url
       ? `<div class="magazine-nm-card-thumb"><img src="${post.thumbnail_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`
       : `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📄</div>`;
+  }
+  if (!post.file_type && post.magazine_post_images && post.magazine_post_images.length > 0) {
+    return `<div class="magazine-nm-card-thumb"><img src="${post.magazine_post_images[0].image_url}" alt="${escHtml(post.title)}" loading="lazy"></div>`;
   }
   if (post.file_type === 'epub') {
     // ★2026-08-13(스코핑 정정): 표지 추출을 처음엔 범위 밖으로 뺐다가, 오너가 원래
@@ -98,15 +139,20 @@ function nmThumbHtml(post) {
 
 function nmCardHtml(post) {
   const badge = post.file_type === 'pdf' ? 'PDF' : post.file_type === 'image' ? '사진' : post.file_type === 'epub' ? 'EPUB' : '글';
+  const authorLine = post.author_name ? `${escHtml(post.author_name)} · ` : '';
   return `
     <button type="button" class="magazine-nm-card" data-post-id="${post.id}">
       ${nmThumbHtml(post)}
       <div class="magazine-nm-card-body">
         <p class="magazine-post-title">${escHtml(post.title)}</p>
-        <p class="magazine-post-date">${(post.created_at || '').slice(0, 10)}</p>
+        <p class="magazine-post-date">${authorLine}${(post.created_at || '').slice(0, 10)}</p>
         <span class="magazine-post-badge">${badge}</span>
       </div>
     </button>`;
+}
+
+function canManagePost(post) {
+  return !!(__ncProfile && (post.author_id === __ncProfile.id || __ncProfile.is_admin));
 }
 
 let __nmPostsById = new Map();
@@ -179,11 +225,24 @@ function openNmLightbox(post) {
   const linkEl = document.getElementById('nm-lightbox-open-link');
   const downloadEl = document.getElementById('nm-lightbox-download-link');
   const bodyEl = document.getElementById('nm-lightbox-body');
+  const editEl = document.getElementById('nm-lightbox-edit');
+  const deleteEl = document.getElementById('nm-lightbox-delete');
   titleEl.textContent = post.title;
+  editEl.hidden = !canManagePost(post);
+  editEl.onclick = () => { closeNmLightbox(); startEditNcPost(post); };
+  deleteEl.hidden = !canManagePost(post);
+  deleteEl.onclick = () => removeNcPost(post);
   if (!post.file_url) {
     downloadEl.hidden = true;
+    // 첨부파일이 없는 글은 열어서 새 탭에 띄울 원본이 없으므로 링크 자체를 숨긴다.
     linkEl.hidden = true;
-    bodyEl.innerHTML = `<div class="nm-lightbox-textbody">${escHtml(post.body || '')}</div>`;
+    // 회원이 이 페이지에서 직접 쓴 글은 magazine_post_images에 사진이 여러 장 붙을 수
+    // 있다 — 갤러리 라이트박스(news-gallery.html)의 lightbox-grid--stack과 같은 발상으로
+    // 전체 너비로 쭉 쌓아서 보여준다(가로 캐러셀보다 모바일에서 스크롤 한 번으로 다 보임).
+    const imagesHtml = (post.magazine_post_images || [])
+      .map(img => `<img src="${escHtml(img.image_url)}" alt="${escHtml(post.title)}" style="width:100%;border-radius:10px;margin-bottom:12px;display:block;">`)
+      .join('');
+    bodyEl.innerHTML = `<div class="nm-lightbox-textbody">${imagesHtml}<p style="white-space:pre-wrap;">${escHtml(post.body || '')}</p></div>`;
   } else if (post.file_type === 'image') {
     linkEl.hidden = false;
     linkEl.href = post.file_url;
@@ -233,6 +292,180 @@ document.getElementById('nm-lightbox-backdrop').addEventListener('click', closeN
 document.getElementById('nm-lightbox-close').addEventListener('click', closeNmLightbox);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !document.getElementById('nm-lightbox').hidden) closeNmLightbox();
+});
+
+let __ncProfile = null;
+let __ncEditingId = null;
+
+let __ncPreviewUrls = [];
+
+function updateNcImagePreviews(files) {
+  const wrap = document.getElementById('nc-image-previews');
+  __ncPreviewUrls.forEach(url => URL.revokeObjectURL(url));
+  __ncPreviewUrls = [];
+  wrap.innerHTML = '';
+  Array.from(files || []).forEach(file => {
+    const url = URL.createObjectURL(file);
+    __ncPreviewUrls.push(url);
+    const img = document.createElement('img');
+    img.src = url;
+    wrap.appendChild(img);
+  });
+}
+
+document.getElementById('nc-images').addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  const errorEl = document.getElementById('nc-error');
+  errorEl.hidden = true;
+  if (files.length > NC_MAX_IMAGES) {
+    errorEl.textContent = `사진은 최대 ${NC_MAX_IMAGES}장까지 첨부할 수 있습니다.`;
+    errorEl.hidden = false;
+    e.target.value = '';
+    updateNcImagePreviews([]);
+    return;
+  }
+  const invalid = files.find(f => !NC_ALLOWED_IMAGE_TYPES.includes(f.type));
+  if (invalid) {
+    errorEl.textContent = 'JPG, PNG 파일만 첨부할 수 있습니다.';
+    errorEl.hidden = false;
+    e.target.value = '';
+    updateNcImagePreviews([]);
+    return;
+  }
+  updateNcImagePreviews(files);
+});
+
+function startEditNcPost(post) {
+  __ncEditingId = post.id;
+  document.getElementById('nc-category').value = post.category || '';
+  document.getElementById('nc-title').value = post.title || '';
+  document.getElementById('nc-body').value = post.body || '';
+  document.getElementById('nc-images').value = '';
+  updateNcImagePreviews([]);
+  document.getElementById('nc-edit-hint').hidden = false;
+  document.getElementById('nc-submit-btn').textContent = '수정 저장';
+  document.getElementById('nc-cancel-edit-btn').hidden = false;
+  document.getElementById('nc-error').hidden = true;
+  document.getElementById('ncWriteForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function exitNcEditMode() {
+  __ncEditingId = null;
+  document.getElementById('ncWriteForm').reset();
+  updateNcImagePreviews([]);
+  document.getElementById('nc-edit-hint').hidden = true;
+  document.getElementById('nc-submit-btn').textContent = '글 등록';
+  document.getElementById('nc-cancel-edit-btn').hidden = true;
+}
+
+document.getElementById('nc-cancel-edit-btn').addEventListener('click', exitNcEditMode);
+
+async function uploadNcImages(files, postId) {
+  const sb = requireSupabaseClient();
+  const uploadedPaths = [];
+  try {
+    const rows = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ext = (file.name.split('.').pop() || (file.type === 'image/png' ? 'png' : 'jpg')).toLowerCase();
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${i}.${ext}`;
+      const { error: uploadError } = await sb.storage.from(NC_IMAGE_BUCKET).upload(path, file, { upsert: false });
+      if (uploadError) throw uploadError;
+      uploadedPaths.push(path);
+      const { data: pub } = sb.storage.from(NC_IMAGE_BUCKET).getPublicUrl(path);
+      rows.push({ post_id: postId, image_url: pub.publicUrl, image_path: path, sort_order: i });
+    }
+    await insertMagazinePostImages(rows);
+  } catch (err) {
+    // 여러 장 중 일부만 업로드된 상태에서 실패하면, 이미 올라간 파일들이 DB에 참조되지
+    // 않은 채 Storage에 고아로 남는다 — 실패를 삼키지 않고 그대로 다시 던지되, 이미 올린
+    // 파일들은 먼저 지워서 "전부 성공하거나 아무 흔적도 안 남거나" 둘 중 하나만 되게 한다.
+    if (uploadedPaths.length > 0) {
+      try { await sb.storage.from(NC_IMAGE_BUCKET).remove(uploadedPaths); } catch (cleanupErr) { console.error('업로드 실패 후 정리 실패:', cleanupErr); }
+    }
+    throw err;
+  }
+}
+
+async function removeNcPost(post) {
+  if (!confirm(`"${post.title}" 글을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  try {
+    await deleteMagazinePost(post.id);
+    const sb = requireSupabaseClient();
+    // magazine_post_images 행은 on delete cascade로 이미 지워졌지만, Storage의 실제
+    // 파일은 cascade로 안 지워지므로 여기서 직접 정리한다(관리자가 admin-magazine.html로
+    // 올린 PDF/EPUB/썸네일 파일도 이 라이트박스에서 관리자가 지울 수 있으므로 같이 정리).
+    const staleImagePaths = (post.magazine_post_images || []).map(img => img.image_path).filter(Boolean);
+    if (staleImagePaths.length > 0) {
+      await sb.storage.from(NC_IMAGE_BUCKET).remove(staleImagePaths);
+    }
+    if (post.file_path) {
+      await sb.storage.from('magazine-files').remove([post.file_path]);
+    }
+    if (post.thumbnail_path) {
+      await sb.storage.from('magazine-files').remove([post.thumbnail_path]);
+    }
+    await loadBoardPage();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('ncWriteForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('nc-error');
+  errorEl.hidden = true;
+  const category = document.getElementById('nc-category').value.trim();
+  const title = document.getElementById('nc-title').value.trim();
+  const body = document.getElementById('nc-body').value.trim();
+  const files = Array.from(document.getElementById('nc-images').files || []);
+  const submitBtn = document.getElementById('nc-submit-btn');
+  if (!category || !title || !body) return;
+
+  const wasEditing = !!__ncEditingId;
+  submitBtn.disabled = true;
+  submitBtn.textContent = wasEditing ? '저장 중…' : '등록 중…';
+  try {
+    if (wasEditing) {
+      const editingId = __ncEditingId;
+      await updateMagazinePost(editingId, { category, title, body });
+      if (files.length > 0) {
+        // 새 사진을 먼저 올리고 등록에 성공한 뒤에야 옛 사진을 지운다(순서가 중요 —
+        // 반대로 하면 새 업로드가 중간에 실패했을 때 옛 사진 DB행이 이미 지워진 뒤라
+        // 글에 사진이 하나도 안 남는 상태로 망가진다). 새 행과 옛 행이 잠깐 같은
+        // post_id를 공유하게 되므로, 옛 행은 post_id 전체삭제가 아니라 미리 캡처해둔
+        // id 목록으로 콕 집어 지운다(방금 넣은 새 행까지 같이 지워지는 사고 방지).
+        const oldPost = __nmPostsById.get(String(editingId));
+        const oldImages = (oldPost && oldPost.magazine_post_images) || [];
+        await uploadNcImages(files, editingId);
+        const oldImageIds = oldImages.map(img => img.id).filter(Boolean);
+        if (oldImageIds.length > 0) {
+          await deleteMagazinePostImagesByIds(oldImageIds);
+        }
+        const oldImagePaths = oldImages.map(img => img.image_path).filter(Boolean);
+        if (oldImagePaths.length > 0) {
+          const sb = requireSupabaseClient();
+          await sb.storage.from(NC_IMAGE_BUCKET).remove(oldImagePaths);
+        }
+      }
+    } else {
+      const created = await createMagazinePost({
+        board: BOARD, category, title, body,
+        author_id: __ncProfile.id, author_name: __ncProfile.name,
+      });
+      if (files.length > 0) {
+        await uploadNcImages(files, created.id);
+      }
+    }
+    exitNcEditMode();
+    await loadBoardPage();
+  } catch (err) {
+    errorEl.textContent = (wasEditing ? '수정' : '등록') + ' 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = wasEditing ? '수정 저장' : '글 등록';
+  }
 });
 
 let __nmObserver = null;
@@ -313,8 +546,19 @@ async function loadBoardPage() {
 (async function () {
   try {
     const profile = await getCurrentProfile();
+    __ncProfile = profile;
     if (profile && profile.is_admin) {
       document.getElementById('boardWriteBtn').hidden = false;
+    }
+    if (profile) {
+      document.getElementById('ncWriteForm').hidden = false;
+      try {
+        const categories = await fetchMagazineCategories(BOARD);
+        document.getElementById('nc-category-list').innerHTML =
+          categories.map(c => `<option value="${escHtml(c)}"></option>`).join('');
+      } catch (err) { /* 카테고리 자동완성 실패는 글쓰기 자체를 막지 않는다 */ }
+    } else {
+      document.getElementById('ncWriteGuard').hidden = false;
     }
   } catch (err) { /* 로그인 안 한 방문자는 무시 */ }
   await loadBoardPage();

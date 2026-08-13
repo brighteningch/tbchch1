@@ -181,3 +181,122 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
   on conflict (id) do update set
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
+
+-- ★2026-08-14: 오너 요청 — 교회학교/청청 게시판은 관리자 전용 글쓰기에서 "로그인한 회원
+-- 누구나 글쓰기, 수정·삭제는 본인 글이거나 관리자만"으로 개방한다(community_posts와 동일한
+-- 권한 모델, 106~125줄 참고). '빛나는 매거진'(board='magazine')은 이번 변경 대상이 아니라
+-- 계속 관리자 전용으로 남아야 하므로, 3개 board가 테이블 하나를 공유하는 이 스키마 구조상
+-- INSERT/UPDATE/DELETE 정책을 board 값으로 분기해야 한다(작년 밤 "파일 필수 여부"를
+-- board별로 나눴던 것과 동일한 패턴 — magazine_posts_magazine_requires_file 제약 참고).
+--
+-- author_id/author_name은 nullable이다 — 기존에 관리자가 admin-magazine.html로 쓴 글
+-- (매거진뿐 아니라 이미 있던 교회학교/청청 글도 포함)은 소급으로 author_id를 채울 수
+-- 없어 NULL로 남는다. 아래 UPDATE/DELETE 정책에서 `author_id = auth.uid()`는 NULL과는
+-- 항상 비교결과가 UNKNOWN(=false 취급)이 되므로, author_id가 NULL인 글은 자동으로
+-- "관리자만 수정 가능"이 된다 — 오너가 이미 확정한 자연스러운 결과이며 별도 처리 불필요.
+alter table magazine_posts add column if not exists author_id uuid references auth.users(id) on delete set null;
+alter table magazine_posts add column if not exists author_name text;
+
+drop policy if exists "magazine_posts admin insert" on magazine_posts;
+drop policy if exists "magazine_posts insert" on magazine_posts;
+create policy "magazine_posts insert" on magazine_posts
+  for insert with check (
+    (board = 'magazine' and is_admin())
+    or (board in ('next-children', 'next-youth') and (author_id = auth.uid() or is_admin()))
+  );
+
+-- USING과 WITH CHECK을 동일하게 명시한다(PostgreSQL은 WITH CHECK 생략 시 USING을 그대로
+-- 재사용하지만, board 분기 로직처럼 리뷰 대상 보안 규칙은 암묵적 기본동작에 기대지 않고
+-- 명시적으로 적어 둔다). 이 덕분에 next-children/next-youth의 본인 글을 board='magazine'으로
+-- 바꿔치기해 관리자 전용 게시판으로 "세탁"하는 시도가 WITH CHECK에서 그대로 막힌다(새 행의
+-- board가 magazine이 되는 순간 첫 번째 분기는 is_admin()을 요구하고, 두 번째 분기는 board가
+-- next-children/next-youth가 아니게 되어 더 이상 성립하지 않는다 — 일반회원은 어느 쪽도
+-- 통과 못 함).
+drop policy if exists "magazine_posts admin update" on magazine_posts;
+drop policy if exists "magazine_posts update" on magazine_posts;
+create policy "magazine_posts update" on magazine_posts
+  for update using (
+    (board = 'magazine' and is_admin())
+    or (board in ('next-children', 'next-youth') and (author_id = auth.uid() or is_admin()))
+  )
+  with check (
+    (board = 'magazine' and is_admin())
+    or (board in ('next-children', 'next-youth') and (author_id = auth.uid() or is_admin()))
+  );
+
+drop policy if exists "magazine_posts admin delete" on magazine_posts;
+drop policy if exists "magazine_posts delete" on magazine_posts;
+create policy "magazine_posts delete" on magazine_posts
+  for delete using (
+    (board = 'magazine' and is_admin())
+    or (board in ('next-children', 'next-youth') and (author_id = auth.uid() or is_admin()))
+  );
+
+-- 회원이 직접 쓰는 교회학교/청청 글의 이미지 여러 장 첨부 — gallery_photos/sermon_images와
+-- 동일한 부모글 1:N 패턴을 재사용하되(신규 버그 표면 최소화), 그 두 테이블과 달리 쓰기
+-- 권한이 admin 전용이 아니라 "그 글의 작성자 본인 또는 관리자"다. 이미지 자체에는
+-- author_id가 없으므로, 부모 magazine_posts 행의 author_id를 exists 서브쿼리로 대조해
+-- 판정한다(이미지 한 장 한 장에 소유자 컬럼을 중복 저장하지 않고 글 하나의 소유권 판정
+-- 로직을 한 곳(magazine_posts.author_id)에만 둔다).
+create table if not exists magazine_post_images (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references magazine_posts(id) on delete cascade,
+  image_url text not null,
+  image_path text not null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table magazine_post_images enable row level security;
+
+drop policy if exists "magazine_post_images read all" on magazine_post_images;
+create policy "magazine_post_images read all" on magazine_post_images for select using (true);
+
+drop policy if exists "magazine_post_images owner or admin insert" on magazine_post_images;
+create policy "magazine_post_images owner or admin insert" on magazine_post_images
+  for insert with check (
+    exists (
+      select 1 from magazine_posts mp
+      where mp.id = post_id and (mp.author_id = auth.uid() or is_admin())
+    )
+  );
+
+drop policy if exists "magazine_post_images owner or admin delete" on magazine_post_images;
+create policy "magazine_post_images owner or admin delete" on magazine_post_images
+  for delete using (
+    exists (
+      select 1 from magazine_posts mp
+      where mp.id = post_id and (mp.author_id = auth.uid() or is_admin())
+    )
+  );
+
+-- Storage 버킷 — 기존 magazine-files(관리자 전용, PDF/EPUB/썸네일)와 완전히 분리한 새
+-- 버킷이다. 만약 magazine-files의 Storage 정책을 "회원 전체 업로드 허용"으로 바꿔버리면
+-- board='magazine' 전용이어야 할 admin-magazine.html의 PDF/EPUB 업로드까지 회원 전체에게
+-- 열리게 된다(Storage 정책에는 board 개념이 없어 이 파일들이 어느 board 글에 쓰였는지
+-- 구분할 수 없다) — 그래서 반드시 새 버킷을 쓴다. 허용 형식은 JPG/PNG만(오너 지정 —
+-- community-post-images/sermon-images가 허용하는 gif/webp는 포함하지 않는다). 소유권
+-- 판정은 storage.objects.owner_id(Supabase가 업로드 시점에 서버측에서 자동 기록하는
+-- 인증 사용자 id)를 쓴다 — community_post_images_schema.sql과 동일한 근거·동일한 타입
+-- 캐스팅(owner_id는 text라 auth.uid()를 ::text로 캐스팅해야 비교됨, supabase/supabase#29836).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('magazine-post-images', 'magazine-post-images', true, 10485760,
+    array['image/jpeg', 'image/png'])
+  on conflict (id) do update set
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "magazine-post-images public read" on storage.objects;
+create policy "magazine-post-images public read" on storage.objects
+  for select using (bucket_id = 'magazine-post-images');
+
+drop policy if exists "magazine-post-images authenticated insert" on storage.objects;
+create policy "magazine-post-images authenticated insert" on storage.objects
+  for insert to authenticated with check (bucket_id = 'magazine-post-images');
+
+drop policy if exists "magazine-post-images owner or admin delete" on storage.objects;
+create policy "magazine-post-images owner or admin delete" on storage.objects
+  for delete using (
+    bucket_id = 'magazine-post-images'
+    and (owner_id = (select auth.uid()::text) or is_admin())
+  );
