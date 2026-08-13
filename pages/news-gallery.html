@@ -77,8 +77,8 @@ function renderAlbumPage(page) {
   grid.innerHTML = pageItems.map(a => `
     <button type="button" class="gallery-album-card" data-album-id="${a.id}">
       <div class="gallery-album-thumb">
-        ${a.cover_image_url
-          ? `<img src="${a.cover_image_url}" alt="${escHtml(a.title)}" loading="lazy">`
+        ${a.cover_signed_url
+          ? `<img src="${a.cover_signed_url}" alt="${escHtml(a.title)}" loading="lazy">`
           : `<div class="gallery-cat-thumb-empty">사진 없음</div>`}
       </div>
       <p class="gallery-album-title">${escHtml(a.title)}</p>
@@ -97,7 +97,7 @@ async function loadAlbums() {
   const grid = document.getElementById('gallery-album-grid');
   grid.innerHTML = '<p class="gallery-empty">불러오는 중...</p>';
   try {
-    __galleryAlbums = await fetchGalleryAlbums(__galleryCategory);
+    __galleryAlbums = await attachGallerySignedCovers(await fetchGalleryAlbums(__galleryCategory));
     renderAlbumPage(1);
   } catch (err) {
     console.error('갤러리 로드 실패:', err);
@@ -118,10 +118,10 @@ async function openAlbumLightbox(album) {
   box.hidden = false;
 
   try {
-    const photos = await fetchGalleryPhotos(album.id);
+    const photos = await attachGallerySignedPhotoUrls(await fetchGalleryPhotos(album.id));
     document.getElementById('lightboxSub').textContent = [dateLabel, `사진 ${photos.length}장`].filter(Boolean).join(' · ');
     grid.innerHTML = photos.length
-      ? photos.map(p => `<img src="${p.image_url}" alt="${escHtml(title)}" loading="lazy">`).join('')
+      ? photos.map(p => `<img src="${p.signed_url}" alt="${escHtml(title)}" loading="lazy">`).join('')
       : '<p class="lightbox-loading">등록된 사진이 없습니다.</p>';
   } catch (err) {
     grid.innerHTML = '<p class="lightbox-loading">사진을 불러오지 못했습니다.</p>';

@@ -134,9 +134,26 @@ create policy "gallery-images owner or admin delete" on storage.objects
     bucket_id = 'gallery-images'
     and (owner_id = (select auth.uid()::text) or is_admin())
   );
--- gallery-images의 "public read"·"admin update" 정책은 이번 티켓 범위 밖(읽기는 아래 4번에서
--- 다루는 테이블 RLS로 이미 실질 게이팅되고, update는 현재 어떤 화면도 쓰지 않는 미사용 기능이라
--- 손대지 않는다 — 외과적 변경).
+-- ★reviewer-codex 2차 검토 REVISE 반영(2026-08-13, 재오픈): 위 "테이블(gallery_albums/
+-- gallery_photos) RLS로 이미 실질 게이팅된다"는 판단은 틀렸다 — 테이블 행은 로그인해야
+-- 조회되지만, 실제 사진 '파일'을 담은 이 버킷 자체가 public=true라서 anon이 image_url을
+-- 직접 알면(캐시된 링크·공유 등으로) 테이블 RLS를 완전히 우회해 로그인 없이도 파일을 그냥
+-- 받을 수 있었다. bucket.public을 false로 바꾼다 — RLS 정책만으로는 익명이 쓰는
+-- /object/public/ 엔드포인트 자체를 못 막는다(그 엔드포인트는 bucket.public 플래그로만
+-- 게이트된다). 버킷이 비공개가 되면 지금까지 DB에 저장해온 공개 URL 문자열(getPublicUrl
+-- 결과)은 로그인 여부와 무관하게 전부 못 쓰게 되므로(★<img src>는 인증 헤더를 못 붙인다 —
+-- 브라우저가 img 태그 요청에 Authorization을 자동으로 실어주지 않는다), 클라이언트 코드도
+-- 렌더 시점마다 로그인 세션으로 createSignedUrl을 새로 발급하는 방식으로 함께 바꿨다
+-- (gallery-data.js/script.js/news-gallery.html/admin-gallery.html — 서명URL은 토큰이
+-- URL 쿼리에 실려있어 <img src>가 별도 인증 헤더 없이도 그대로 동작한다).
+update storage.buckets set public = false where id = 'gallery-images';
+
+drop policy if exists "gallery-images public read" on storage.objects;
+drop policy if exists "gallery-images authenticated read" on storage.objects;
+create policy "gallery-images authenticated read" on storage.objects
+  for select to authenticated using (bucket_id = 'gallery-images');
+-- gallery-images의 "admin update" 정책은 여전히 이 티켓 범위 밖(현재 어떤 화면도 쓰지 않는
+-- 미사용 기능) — 손대지 않는다.
 
 -- ============================================================
 -- 4) community_posts — 지역자료실 anon 읽기 예외 롤백 + community_posts_list 뷰 취약점 수정

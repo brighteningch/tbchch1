@@ -12,8 +12,8 @@ function loadGallery(previewId) {
   if (!wrap) return;
 
   fetchGalleryAlbums()
-    .then(albums => {
-      const preview = albums.slice(0, 3);
+    .then(albums => attachGallerySignedCovers(albums.slice(0, 3)))
+    .then(preview => {
       if (preview.length === 0) {
         wrap.innerHTML = '';
         if (emptyEl) emptyEl.hidden = false;
@@ -23,8 +23,8 @@ function loadGallery(previewId) {
       wrap.innerHTML = preview.map(a => `
         <a class="gallery-album-card" href="/pages/news-gallery.html">
           <div class="gallery-album-thumb">
-            ${a.cover_image_url
-              ? `<img src="${a.cover_image_url}" alt="${a.title}" loading="lazy">`
+            ${a.cover_signed_url
+              ? `<img src="${a.cover_signed_url}" alt="${a.title}" loading="lazy">`
               : `<div class="gallery-cat-thumb-empty">사진 없음</div>`}
           </div>
           <p class="gallery-album-title">${a.title}</p>
