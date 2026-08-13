@@ -194,15 +194,11 @@ function isSafeNavHref(href) {
   return typeof href === 'string' && /^(\/(?!\/)|https:\/\/|mailto:|tel:|#)/i.test(href.trim());
 }
 
-// ★reviewer-codex 보안검토 REVISE 반영(2026-08-13) — common.js의 isSafeImageUrl과 동일 규칙
-// (파일이 분리돼있어 중복 정의). heroImage는 클릭 없이 페이지 로드 즉시 요청이 나가므로
-// href보다 엄격하게, 우리 nav-hero-images 버킷 공개 URL 접두어와 정확히 일치하는 것만 허용한다.
-const NAV_HERO_IMAGE_URL_PREFIX =
-  'https://vogslryxeicemtotleph.supabase.co/storage/v1/object/public/nav-hero-images/';
-function isSafeImageUrl(url) {
-  return url === null || url === undefined ||
-    (typeof url === 'string' && url.trim().startsWith(NAV_HERO_IMAGE_URL_PREFIX));
-}
+// ★2026-08-13 수정: NAV_HERO_IMAGE_URL_PREFIX/isSafeImageUrl은 common.js(이 파일보다 먼저
+// 로드됨, 57번줄)에 이미 정의돼 있다 — 여기서 const로 다시 선언하면 같은 전역 스코프에서
+// "Identifier has already been declared" SyntaxError가 나서 이 페이지의 스크립트 전체가
+// 실행 중단되고 본문이 완전히 빈 화면이 되는 실제 장애가 있었다(오너 신고로 발견). 중복
+// 정의를 지우고 common.js의 것을 그대로 재사용한다.
 
 // 유효하면 null, 아니면 관리자가 바로 어디를 고쳐야 하는지 알 수 있는 문구를 반환한다.
 // ★그룹 개수는 고정하지 않는다(오너 정정지시, 2026-08-12) — 최초에는 "그룹 6개 고정"으로
