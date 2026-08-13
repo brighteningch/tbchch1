@@ -289,10 +289,15 @@ function isSafeNavHref(href) {
   return typeof href === 'string' && /^(\/(?!\/)|https:\/\/|mailto:|tel:|#)/i.test(href.trim());
 }
 
-// 메뉴그룹 대표이미지(heroImage)는 Supabase Storage의 getPublicUrl 결과만 들어와야 한다
-// (pages/admin-nav-menu.html이 업로드 직후 그 값만 넣는다). null(미설정)은 항상 허용한다.
+// ★reviewer-codex 보안검토 REVISE 반영(2026-08-13): href(링크)는 방문자가 클릭해야 위험이
+// 발동하지만, heroImage는 페이지 로드 즉시 클릭 없이 요청이 나가므로 "https://면 다 허용"
+// 정도의 느슨한 기준을 재사용하면 안 된다는 지적. 우리 프로젝트의 nav-hero-images 버킷 공개
+// URL 접두어와 정확히 일치하는 것만 허용한다 — 다른 버킷·다른 오리진의 https:// URL(예: 외부
+// 이미지 호스팅, 추적 픽셀)은 전부 거부한다.
+const NAV_HERO_IMAGE_URL_PREFIX =
+  'https://vogslryxeicemtotleph.supabase.co/storage/v1/object/public/nav-hero-images/';
 function isSafeImageUrl(url) {
-  return url === null || (typeof url === 'string' && /^https:\/\//i.test(url.trim()));
+  return url === null || (typeof url === 'string' && url.trim().startsWith(NAV_HERO_IMAGE_URL_PREFIX));
 }
 
 // app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
@@ -376,7 +381,8 @@ function findCurrentPageGroup(navMenu) {
 // 매칭하지 라벨은 전혀 보지 않는다. 이미지가 없거나(null) navMenu 자체가 없으면(폴백 상태)
 // 아무것도 하지 않아 기존 navy 그라데이션이 그대로 유지된다. .style.backgroundImage는
 // innerHTML이 아니라 CSSOM 프로퍼티 대입이라 HTML/스크립트 삽입 위험이 없다 — 다만 URL
-// 자체는 isValidNavMenu(isSafeImageUrl)에서 이미 https:// 스킴만 통과하도록 검증됐다.
+// 자체는 isValidNavMenu(isSafeImageUrl)에서 이미 nav-hero-images 버킷 공개 URL 접두어와
+// 정확히 일치하는 값만 통과하도록 검증됐다.
 function applyPageHeroImage(navMenu) {
   if (!navMenu) return;
   const hero = document.querySelector('.page-hero');
