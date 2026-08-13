@@ -138,7 +138,14 @@ async function loadMagazinePage() {
       if (!grouped.has(p.category)) grouped.set(p.category, []);
       grouped.get(p.category).push(p);
     });
+    // '교회뉴스'는 홈페이지 featured 카테고리와 동일하게 이 페이지에서도 항상 맨 위에
+    // 오도록 고정한다(오너 요청) — 나머지 카테고리는 기존 순서(최신 글 기준) 그대로.
     const categories = Array.from(grouped.keys());
+    const featuredIdx = categories.indexOf('교회뉴스');
+    if (featuredIdx > 0) {
+      categories.splice(featuredIdx, 1);
+      categories.unshift('교회뉴스');
+    }
 
     __nmPostsById = new Map(posts.map(p => [String(p.id), p]));
 
