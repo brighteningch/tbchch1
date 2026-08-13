@@ -311,6 +311,19 @@ function isSafeMapUrl(url) {
   return typeof url === 'string' && /^https:\/\//i.test(url.trim());
 }
 
+// ★2026-08-14(community_posts 다중이미지, 오너 명시): 첨부사진은 JPG·PNG만 받는다. accept
+// 속성은 우회 가능한 UX 힌트일 뿐이라(sermon_images_schema.sql과 동일 원칙) 진짜 방어선은
+// storage.buckets.allowed_mime_types(서버측)이지만, 사용자가 잘못된 형식을 골랐을 때
+// 업로드 시도 전에 미리 걸러 알려주기 위한 클라이언트측 1차 필터. 선택된 FileList에서
+// 허용 형식만 남기고, 걸러진 파일이 있으면 이름과 함께 반환해 호출부가 안내할 수 있게 한다.
+const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png'];
+function filterJpgPngFiles(fileList) {
+  const files = Array.from(fileList || []);
+  const accepted = files.filter(f => ALLOWED_IMAGE_MIME_TYPES.includes(f.type));
+  const rejected = files.filter(f => !ALLOWED_IMAGE_MIME_TYPES.includes(f.type));
+  return { accepted, rejected };
+}
+
 // app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
 // 이 검사를 통과 못하면 applyDynamicNavMenu는 아무것도 하지 않고 header.html의 하드코딩된
 // 메뉴를 그대로 둔다 — "값이 없거나 파싱 실패해도 사이트가 절대 깨지면 안 된다"는 요구사항의

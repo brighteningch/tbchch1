@@ -1630,6 +1630,21 @@ section { padding: 88px 0; }
   aspect-ratio: 1 / 1; background: var(--bg-cool);
 }
 .sermon-image-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------- community_posts 다중이미지 첨부: 글쓰기 폼 선택 미리보기(2026-08-14) ----------
+   admin-sermons.html의 .sm-image-* 인라인 스타일 패턴을 4개 글쓰기 폼(이야기나누기·
+   중보기도·지역자료실 2개)이 공유하도록 전역 클래스로 뺀 것. */
+.cpi-image-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.cpi-image-item { position: relative; width: 96px; height: 96px; }
+.cpi-image-item img {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 10px; display: block;
+  border: 1px solid var(--border-light);
+}
+.cpi-image-remove {
+  position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%;
+  background: #e04b4b; color: #fff; border: none; font-size: 13px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
 .sermon-view-side h3 { font-size: 14px; color: var(--text-gray); margin-bottom: 12px; }
 .sermon-view-side ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .sermon-view-side li a {

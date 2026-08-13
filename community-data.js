@@ -46,3 +46,31 @@ async function deleteCommunityPost(id) {
   const { error } = await sb.from("community_posts").delete().eq("id", id);
   if (error) throw error;
 }
+
+// 게시글 첨부사진(community_posts_images, 1:N) — 읽기는 로그인 회원, 쓰기는 글쓴이 본인만(RLS)
+async function fetchCommunityPostImages(postId) {
+  const sb = getSupabaseClient();
+  if (!sb) return [];
+  const { data, error } = await sb.from("community_posts_images")
+    .select("*").eq("post_id", postId).order("sort_order", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+async function addCommunityPostImage(payload) {
+  const sb = requireSupabaseClient();
+  const { data, error } = await sb.from("community_posts_images").insert(payload).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// 목록 화면(카드 여러 개)에서 글마다 따로 조회하면 N+1이 되므로, 게시글 id 목록을 한 번에
+// 넘겨 한 번의 쿼리로 전부 받아온다 — 호출부에서 post_id 기준으로 그룹핑해서 쓴다.
+async function fetchCommunityPostImagesByPostIds(postIds) {
+  const sb = getSupabaseClient();
+  if (!sb || !postIds || postIds.length === 0) return [];
+  const { data, error } = await sb.from("community_posts_images")
+    .select("*").in("post_id", postIds).order("sort_order", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}

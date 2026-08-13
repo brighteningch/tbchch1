@@ -30,10 +30,10 @@
     <label>내용
       <textarea id="biz-body" rows="6" required placeholder="사업체 소개, 위치, 연락처 등을 자유롭게 적어주세요."></textarea>
     </label>
-    <label>사진 (선택)
-      <input type="file" id="biz-image" accept="image/*">
+    <label>사진 (선택, 여러 장 가능, JPG·PNG만)
+      <input type="file" id="biz-images" accept="image/jpeg,image/png" multiple>
     </label>
-    <img id="biz-preview" hidden alt="선택한 사진 미리보기" style="max-width:240px;border-radius:10px;margin-top:8px;display:block;">
+    <div class="cpi-image-grid" id="biz-image-preview"></div>
     <label>지도 링크 (선택)
       <input type="url" id="biz-map-url" placeholder="다음지도 등에서 위치 검색 후 나온 https:// 링크 주소">
     </label>
@@ -75,14 +75,26 @@ function escBiz(s) { return (s || '').toString().replace(/&/g, '&amp;').replace(
 let __bizProfile = null;
 let __bizPosts = [];
 let __bizPostsById = new Map();
+let __bizImagesByPost = new Map(); // post_id(string) -> community_posts_images 배열(sort_order순)
+
+// 신규 글은 community_posts_images(1:N)만 쓰고, 과거 글은 image_url 단일 컬럼으로 계속
+// 표시한다(마이그레이션 없음) — 그래서 항상 "이 글의 이미지 목록"을 다중테이블 우선,
+// 없으면 레거시 컬럼으로 폴백해서 구한다.
+function bizImagesOf(post) {
+  const multi = __bizImagesByPost.get(String(post.id));
+  if (multi && multi.length > 0) return multi;
+  if (post.image_url) return [{ image_url: post.image_url, image_path: post.image_path }];
+  return [];
+}
 
 // news-magazine.html의 magazine-nm-card/magazine-nm-grid/nm-lightbox 클래스를 그대로
-// 재사용한다(오너 요청 — "news-magazine.html처럼"). 카드는 썸네일(사진 있으면 사진,
-// 없으면 아이콘)+제목+작성자/날짜 요약만 보여주고, 본문 전체·지도 링크는 클릭해서 여는
-// 라이트박스에서만 노출한다.
+// 재사용한다(오너 요청 — "news-magazine.html처럼"). 카드는 썸네일(첫 장 사진 있으면 사진,
+// 없으면 아이콘)+제목+작성자/날짜 요약만 보여주고, 본문 전체·지도 링크·나머지 사진은
+// 클릭해서 여는 라이트박스에서만 노출한다.
 function bizThumbHtml(post) {
-  if (post.image_url) {
-    return `<div class="magazine-nm-card-thumb"><img src="${escBiz(post.image_url)}" alt="${escBiz(post.title)}" loading="lazy"></div>`;
+  const images = bizImagesOf(post);
+  if (images.length > 0) {
+    return `<div class="magazine-nm-card-thumb"><img src="${escBiz(images[0].image_url)}" alt="${escBiz(post.title)}" loading="lazy"></div>`;
   }
   return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">🏪</div>`;
 }
@@ -113,9 +125,13 @@ function openBizLightbox(post) {
   const mapButtonHtml = isSafeMapUrl(post.map_url)
     ? `<p style="margin-top:20px;"><a href="${escBiz(post.map_url)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">지도에서 보기 ↗</a></p>`
     : '';
+  const images = bizImagesOf(post);
+  const imagesHtml = images.map(img =>
+    `<img src="${escBiz(img.image_url)}" alt="${escBiz(post.title)}" style="max-width:100%;border-radius:10px;margin-bottom:12px;display:block;">`
+  ).join('');
   bodyEl.innerHTML = `
     <div class="nm-lightbox-textbody">
-      ${post.image_url ? `<img src="${escBiz(post.image_url)}" alt="${escBiz(post.title)}" style="max-width:100%;border-radius:10px;margin-bottom:18px;display:block;">` : ''}
+      ${imagesHtml}
       <p style="white-space:pre-wrap;">${escBiz(post.body)}</p>
       ${mapButtonHtml}
     </div>`;
@@ -145,6 +161,17 @@ async function loadBizPosts() {
   const emptyEl = document.getElementById('biz-empty');
   __bizPosts = await fetchCommunityPosts(BIZ_BOARD);
   __bizPostsById = new Map(__bizPosts.map(p => [String(p.id), p]));
+  __bizImagesByPost = new Map();
+  try {
+    const allImages = await fetchCommunityPostImagesByPostIds(__bizPosts.map(p => p.id));
+    allImages.forEach(img => {
+      const key = String(img.post_id);
+      if (!__bizImagesByPost.has(key)) __bizImagesByPost.set(key, []);
+      __bizImagesByPost.get(key).push(img);
+    });
+  } catch (imgErr) {
+    console.error('첨부사진 목록을 불러오지 못했습니다:', imgErr);
+  }
   if (__bizPosts.length === 0) {
     listEl.innerHTML = '';
     emptyEl.hidden = false;
@@ -164,10 +191,12 @@ async function removeBizPost(id) {
   const post = __bizPostsById.get(String(id));
   if (!confirm(`"${post ? post.title : ''}" 글을 삭제할까요? 되돌릴 수 없습니다.`)) return;
   try {
+    const images = post ? bizImagesOf(post) : [];
+    const imagePaths = images.map(img => img.image_path).filter(Boolean);
     await deleteCommunityPost(id);
-    if (post && post.image_path) {
+    if (imagePaths.length > 0) {
       const sb = requireSupabaseClient();
-      await sb.storage.from(BIZ_BUCKET).remove([post.image_path]);
+      await sb.storage.from(BIZ_BUCKET).remove(imagePaths);
     }
     closeBizLightbox();
     await loadBizPosts();
@@ -176,12 +205,30 @@ async function removeBizPost(id) {
   }
 }
 
-document.getElementById('biz-image').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  const preview = document.getElementById('biz-preview');
-  if (!file) { preview.hidden = true; preview.src = ''; return; }
-  preview.src = URL.createObjectURL(file);
-  preview.hidden = false;
+let __bizPendingFiles = [];
+
+function renderBizImagePreview() {
+  const wrap = document.getElementById('biz-image-preview');
+  wrap.innerHTML = __bizPendingFiles.map((file, i) => `
+    <div class="cpi-image-item">
+      <img src="${URL.createObjectURL(file)}" alt="">
+      <button type="button" class="cpi-image-remove" data-remove-pending="${i}" aria-label="선택 취소">✕</button>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-remove-pending]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      __bizPendingFiles.splice(Number(btn.dataset.removePending), 1);
+      renderBizImagePreview();
+    });
+  });
+}
+
+document.getElementById('biz-images').addEventListener('change', (e) => {
+  const { accepted, rejected } = filterJpgPngFiles(e.target.files);
+  if (rejected.length > 0) {
+    alert('JPG·PNG 사진만 첨부할 수 있습니다. 다음 파일은 제외되었습니다: ' + rejected.map(f => f.name).join(', '));
+  }
+  __bizPendingFiles = accepted;
+  renderBizImagePreview();
 });
 
 document.getElementById('bizForm').addEventListener('submit', async (e) => {
@@ -190,7 +237,6 @@ document.getElementById('bizForm').addEventListener('submit', async (e) => {
   errorEl.hidden = true;
   const title = document.getElementById('biz-title').value.trim();
   const body = document.getElementById('biz-body').value.trim();
-  const file = document.getElementById('biz-image').files[0];
   const mapUrlRaw = document.getElementById('biz-map-url').value.trim();
   const submitBtn = document.getElementById('biz-submit-btn');
   if (!title || !body) return;
@@ -209,31 +255,31 @@ document.getElementById('bizForm').addEventListener('submit', async (e) => {
 
   submitBtn.disabled = true;
   try {
-    const sb = requireSupabaseClient();
-    let imageUrl = null;
-    let imagePath = null;
-    if (file) {
-      submitBtn.textContent = '업로드 중…';
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error: uploadError } = await sb.storage.from(BIZ_BUCKET).upload(path, file, { upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: pub } = sb.storage.from(BIZ_BUCKET).getPublicUrl(path);
-      imageUrl = pub.publicUrl;
-      imagePath = path;
-    }
-
-    await createCommunityPost({
+    const post = await createCommunityPost({
       board: BIZ_BOARD,
       author_id: __bizProfile.id,
       author_name: __bizProfile.name,
       title, body,
-      image_url: imageUrl, image_path: imagePath,
       map_url: mapUrl,
     });
 
+    if (__bizPendingFiles.length > 0) {
+      const sb = requireSupabaseClient();
+      for (let i = 0; i < __bizPendingFiles.length; i++) {
+        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${__bizPendingFiles.length})`;
+        const pfile = __bizPendingFiles[i];
+        const ext = (pfile.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${post.id}/${Date.now()}-${i}.${ext}`;
+        const { error: uploadError } = await sb.storage.from(BIZ_BUCKET).upload(path, pfile, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: pub } = sb.storage.from(BIZ_BUCKET).getPublicUrl(path);
+        await addCommunityPostImage({ post_id: post.id, image_url: pub.publicUrl, image_path: path, sort_order: i });
+      }
+    }
+
     document.getElementById('bizForm').reset();
-    document.getElementById('biz-preview').hidden = true;
+    __bizPendingFiles = [];
+    renderBizImagePreview();
     await loadBizPosts();
   } catch (err) {
     errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;

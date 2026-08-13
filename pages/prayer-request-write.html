@@ -30,8 +30,12 @@
     <label style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:600;">기도 내용
       <textarea id="cBody" rows="10" placeholder="나누고 싶은 기도 제목을 적어주세요." required></textarea>
     </label>
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:600;">사진 첨부 (여러 장 선택 가능, JPG·PNG만)
+      <input type="file" id="cImages" accept="image/jpeg,image/png" multiple>
+    </label>
+    <div class="cpi-image-grid" id="cImagePreview"></div>
     <div class="sermon-form-actions">
-      <button type="submit" class="btn btn-primary">등록하기</button>
+      <button type="submit" class="btn btn-primary" id="cSubmitBtn">등록하기</button>
       <a href="/pages/prayer-request.html" class="btn btn-ghost">취소</a>
     </div>
     <p class="auth-error" id="communityFormError" hidden></p>
@@ -46,7 +50,33 @@
 <script src="/common.js"></script>
 <script>
 const BOARD = "prayer-request";
+const COMMUNITY_POST_IMAGE_BUCKET = 'community-post-images';
 let __profile = null;
+let __pendingImageFiles = [];
+
+function renderCImagePreview() {
+  const wrap = document.getElementById('cImagePreview');
+  wrap.innerHTML = __pendingImageFiles.map((file, i) => `
+    <div class="cpi-image-item">
+      <img src="${URL.createObjectURL(file)}" alt="">
+      <button type="button" class="cpi-image-remove" data-remove-pending="${i}" aria-label="선택 취소">✕</button>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-remove-pending]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      __pendingImageFiles.splice(Number(btn.dataset.removePending), 1);
+      renderCImagePreview();
+    });
+  });
+}
+
+document.getElementById('cImages').addEventListener('change', (e) => {
+  const { accepted, rejected } = filterJpgPngFiles(e.target.files);
+  if (rejected.length > 0) {
+    alert('JPG·PNG 사진만 첨부할 수 있습니다. 다음 파일은 제외되었습니다: ' + rejected.map(f => f.name).join(', '));
+  }
+  __pendingImageFiles = accepted;
+  renderCImagePreview();
+});
 
 async function initWritePage() {
   __profile = await getCurrentProfile();
@@ -61,18 +91,37 @@ document.getElementById('communityForm').addEventListener('submit', async (e) =>
   e.preventDefault();
   const errorEl = document.getElementById('communityFormError');
   errorEl.hidden = true;
+  const submitBtn = document.getElementById('cSubmitBtn');
+  submitBtn.disabled = true;
   try {
-    await createCommunityPost({
+    const post = await createCommunityPost({
       board: BOARD,
       author_id: __profile.id,
       author_name: __profile.name,
       title: document.getElementById('cTitle').value.trim(),
       body: document.getElementById('cBody').value.trim(),
     });
+
+    if (__pendingImageFiles.length > 0) {
+      const sb = requireSupabaseClient();
+      for (let i = 0; i < __pendingImageFiles.length; i++) {
+        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${__pendingImageFiles.length})`;
+        const file = __pendingImageFiles[i];
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${post.id}/${Date.now()}-${i}.${ext}`;
+        const { error: uploadError } = await sb.storage.from(COMMUNITY_POST_IMAGE_BUCKET).upload(path, file, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: pub } = sb.storage.from(COMMUNITY_POST_IMAGE_BUCKET).getPublicUrl(path);
+        await addCommunityPostImage({ post_id: post.id, image_url: pub.publicUrl, image_path: path, sort_order: i });
+      }
+    }
+
     location.href = '/pages/prayer-request.html';
   } catch (err) {
     errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
     errorEl.hidden = false;
+    submitBtn.disabled = false;
+    submitBtn.textContent = '등록하기';
   }
 });
 
