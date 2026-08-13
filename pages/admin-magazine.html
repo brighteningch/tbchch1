@@ -99,6 +99,7 @@
 <script src="/magazine-data.js"></script>
 <script src="/settings-data.js"></script>
 <script src="/common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 <script type="module">
 // PDF 특정 페이지를 JPEG 썸네일 Blob으로 렌더링한다 — 관리자 브라우저에서 직접 실행한다
 // (서버 함수 없이 정적 사이트 구조를 유지하기 위한 선택. repo 전수 grep 결과 이 프로젝트에는
@@ -202,6 +203,95 @@ async function generateAndUploadThumbnail(sourceBlobOrArrayBuffer, pageNumber, b
   return { thumbnail_url: pub.publicUrl, thumbnail_path: thumbPath };
 }
 
+// ★2026-08-13(스코핑 정정): 오너가 원래 신고한 "미리보기가 안 된다"는 라이트박스 안
+// EPUB 리더가 아니라 클릭 전 카드 썸네일 얘기였다 — 표지 추출을 처음 티켓에서 범위
+// 밖으로 뺐던 게 실수였다. EPUB의 표지 위치는 표준 스펙(OCF/OPF)을 확인해서 구현했다
+// (추측 아님):
+//   1) META-INF/container.xml의 <rootfile full-path="..."/>로 실제 OPF 파일 경로를
+//      찾는다(EPUB 루트에 항상 고정된 경로 — OCF 표준).
+//   2) OPF manifest에서 표지를 찾는 두 가지 방식을 순서대로 시도한다:
+//      a) EPUB3 공식: <item properties="cover-image" href="..."/>
+//         (W3C EPUB 3.3 스펙 Appendix D.6.1, cardinality "zero or one" — 없을 수도 있음)
+//      b) 레거시(EPUB2) 방식: metadata의 <meta name="cover" content="ID"/> → manifest에서
+//         그 id를 가진 item의 href. ★실제 production YOLO epub이 바로 이 레거시 방식을
+//         쓰고 있어서(직접 압축 해제해 원문 확인) 이 분기가 실제로 필요했다 — EPUB3
+//         버전이라고 표시돼 있어도(package version="3.0") 레거시 관례를 섞어 쓰는
+//         파일이 실제로 존재한다.
+//   3) href는 OPF 파일 기준 상대경로라 OPF가 있는 디렉터리를 붙여 zip 안의 실제 경로로
+//      바꾼다.
+//   4) 원본 포맷(JPEG/PNG 등)과 무관하게 canvas로 JPEG 변환해 PDF 썸네일과 완전히
+//      동일한 파이프라인(같은 Storage 경로 규칙·같은 thumbnail_url/thumbnail_path
+//      컬럼)에 태운다.
+// 표지 정보가 아예 없는 epub(스펙상 정상적인 경우)이면 null을 반환해 기존 📖 폴백을
+// 그대로 쓴다 — throw하지 않는다(썸네일 실패가 글 등록 자체를 막으면 안 됨).
+async function extractEpubCoverBlob(fileOrArrayBuffer) {
+  if (typeof JSZip !== 'function') {
+    console.error('JSZip이 로드되지 않아 EPUB 표지를 추출할 수 없습니다(CDN 차단 가능성)');
+    return null;
+  }
+  const data = fileOrArrayBuffer instanceof Blob ? await fileOrArrayBuffer.arrayBuffer() : fileOrArrayBuffer;
+  const zip = await JSZip.loadAsync(data);
+
+  const containerFile = zip.file('META-INF/container.xml');
+  if (!containerFile) return null;
+  const containerXml = await containerFile.async('text');
+  const containerDoc = new DOMParser().parseFromString(containerXml, 'application/xml');
+  const opfPath = containerDoc.querySelector('rootfile')?.getAttribute('full-path');
+  if (!opfPath) return null;
+
+  const opfFile = zip.file(opfPath);
+  if (!opfFile) return null;
+  const opfXml = await opfFile.async('text');
+  const opfDoc = new DOMParser().parseFromString(opfXml, 'application/xml');
+  const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+  const manifestItems = Array.from(opfDoc.querySelectorAll('manifest > item'));
+
+  let coverHref = null;
+  const epub3CoverItem = manifestItems.find(item =>
+    (item.getAttribute('properties') || '').split(/\s+/).includes('cover-image'));
+  if (epub3CoverItem) {
+    coverHref = epub3CoverItem.getAttribute('href');
+  } else {
+    const coverId = opfDoc.querySelector('metadata > meta[name="cover"]')?.getAttribute('content');
+    if (coverId) {
+      coverHref = manifestItems.find(item => item.getAttribute('id') === coverId)?.getAttribute('href') || null;
+    }
+  }
+  if (!coverHref) return null; // 표지 지정 없음 — 정상적인 경우, 조용히 폴백
+
+  const coverFile = zip.file(opfDir + coverHref);
+  if (!coverFile) return null;
+  const coverBlob = await coverFile.async('blob');
+
+  const imgUrl = URL.createObjectURL(coverBlob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('표지 이미지 디코딩 실패'));
+      el.src = imgUrl;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+  } finally {
+    URL.revokeObjectURL(imgUrl);
+  }
+}
+
+async function generateAndUploadEpubCoverThumbnail(fileOrArrayBuffer, basePath) {
+  const coverBlob = await extractEpubCoverBlob(fileOrArrayBuffer);
+  if (!coverBlob) return null; // 표지 없음 — 호출자가 조용히 폴백 처리
+  const thumbPath = (basePath || `thumb-${Date.now()}`).replace(/\.[^.]+$/, '') + '-thumb.jpg';
+  const sb = requireSupabaseClient();
+  const { error: upErr } = await sb.storage.from(MAGAZINE_BUCKET).upload(thumbPath, coverBlob, { upsert: true, contentType: 'image/jpeg' });
+  if (upErr) throw upErr;
+  const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(thumbPath);
+  return { thumbnail_url: pub.publicUrl, thumbnail_path: thumbPath };
+}
+
 let __mgPosts = [];
 let __mgFilterCategory = '';
 
@@ -231,7 +321,7 @@ async function refreshCategoryOptions() {
 function magazineAdminThumbCell(p) {
   if (p.file_type === 'image') return `<img src="${p.file_url}" alt="">`;
   if (p.file_type === 'pdf') return p.thumbnail_url ? `<img src="${p.thumbnail_url}" alt="">` : '<span style="font-size:20px;">📄</span>';
-  if (p.file_type === 'epub') return '<span style="font-size:20px;">📖</span>';
+  if (p.file_type === 'epub') return p.thumbnail_url ? `<img src="${p.thumbnail_url}" alt="">` : '<span style="font-size:20px;">📖</span>';
   return '<span style="font-size:20px;">📝</span>';
 }
 
@@ -391,6 +481,21 @@ document.getElementById('form-magazine').addEventListener('submit', async (e) =>
         // 기존 📄 아이콘 폴백으로 보이게 두고 관리자에게 알린다(목록의 재생성 버튼으로 재시도 가능).
         console.error('썸네일 생성 실패(글은 정상 등록됨):', thumbErr);
         alert('글은 등록되었지만 썸네일 생성에 실패했습니다. 목록에서 "썸네일 재생성" 버튼으로 다시 시도해주세요: ' + thumbErr.message);
+      }
+    } else if (fileType === 'epub') {
+      try {
+        const thumbInfo = await generateAndUploadEpubCoverThumbnail(file, path);
+        if (thumbInfo) {
+          await updateMagazinePost(created.id, {
+            thumbnail_url: thumbInfo.thumbnail_url,
+            thumbnail_path: thumbInfo.thumbnail_path,
+          });
+        }
+        // thumbInfo가 null이면 표지 정보가 없는 정상적인 epub이므로 조용히 넘어간다
+        // (기존 📖 폴백 유지 — 에러 아님).
+      } catch (thumbErr) {
+        console.error('EPUB 표지 추출 실패(글은 정상 등록됨):', thumbErr);
+        alert('글은 등록되었지만 표지 추출에 실패했습니다(책 아이콘으로 표시됩니다): ' + thumbErr.message);
       }
     }
 
