@@ -76,6 +76,15 @@ create table if not exists sermons (
   created_at timestamptz default now()
 );
 
+-- ★2026-08-13 드리프트 수정(worker-5가 실측 중 발견): 라이브 DB의 sermons_category_check
+-- 제약(이 파일에는 원래 없던, 대시보드에서 나중에 추가된 것으로 추정)이
+-- ['sermon-sunday','sermon-wed','sermon-fri','praise-wed','praise-fri','3min']만 허용하고
+-- 'sermon-special'(특별설교)이 빠져있었다 — admin-sermons.html 폼에는 특별설교 옵션이
+-- 있는데 저장 시 DB가 항상 거부하는 버그였다. 특별설교를 추가해 제약을 재생성한다.
+alter table sermons drop constraint if exists sermons_category_check;
+alter table sermons add constraint sermons_category_check
+  check (category in ('sermon-sunday', 'sermon-wed', 'sermon-fri', 'sermon-special', 'praise-wed', 'praise-fri', '3min'));
+
 alter table sermons enable row level security;
 
 create policy "anyone can read sermons" on sermons
