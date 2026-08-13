@@ -549,6 +549,27 @@ body {
   padding: 70px 24px 56px;
   text-align: center;
 }
+/* 메뉴그룹에 대표이미지가 지정된 경우에만 common.js(applyPageHeroImage)가 이 클래스와
+   인라인 background-image를 붙인다 — 이미지가 없으면 위 navy 그라데이션이 그대로 유지된다.
+   .has-bg-image(다른 섹션용)는 밝은 배경 위 어두운 글자를 가정한 흰색 오버레이라, 이 화면의
+   흰 글자에는 반대로 어두운(navy 톤) 오버레이가 필요해 별도로 정의한다. */
+.page-hero.has-hero-image {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.page-hero.has-hero-image::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(45,54,82,0.78) 0%, rgba(8,46,93,0.85) 100%);
+  pointer-events: none;
+}
+.page-hero.has-hero-image > * {
+  position: relative;
+  z-index: 1;
+}
 .page-badge {
   display: inline-block;
   background: rgba(255,255,255,0.12);

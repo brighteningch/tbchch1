@@ -289,6 +289,12 @@ function isSafeNavHref(href) {
   return typeof href === 'string' && /^(\/(?!\/)|https:\/\/|mailto:|tel:|#)/i.test(href.trim());
 }
 
+// 메뉴그룹 대표이미지(heroImage)는 Supabase Storage의 getPublicUrl 결과만 들어와야 한다
+// (pages/admin-nav-menu.html이 업로드 직후 그 값만 넣는다). null(미설정)은 항상 허용한다.
+function isSafeImageUrl(url) {
+  return url === null || (typeof url === 'string' && /^https:\/\//i.test(url.trim()));
+}
+
 // app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
 // 이 검사를 통과 못하면 applyDynamicNavMenu는 아무것도 하지 않고 header.html의 하드코딩된
 // 메뉴를 그대로 둔다 — "값이 없거나 파싱 실패해도 사이트가 절대 깨지면 안 된다"는 요구사항의
@@ -299,6 +305,7 @@ function isSafeNavHref(href) {
 function isValidNavMenu(data) {
   return !!data && Array.isArray(data.groups) && data.groups.length > 0 &&
     data.groups.every(g => g && typeof g.label === 'string' && Array.isArray(g.items) &&
+      (g.heroImage === undefined || isSafeImageUrl(g.heroImage)) &&
       g.items.every(it => it && typeof it.label === 'string' && isSafeNavHref(it.href)));
 }
 
@@ -322,31 +329,64 @@ function buildNavMenuHtml(navMenu) {
   }).join('');
 }
 
-// 관리자가 pages/admin-nav-menu.html에서 저장한 메뉴가 있으면 header.html의 하드코딩된
-// 메뉴를 그것으로 다시 그린다. 실패하는 모든 경우(Supabase 미설정·값 없음·파싱 실패·형식
-// 이상)에는 조용히 아무것도 하지 않는다 — 이미 화면에 떠 있는 정적 메뉴가 그대로 유지되므로
-// 이 함수가 실패해도 사이트는 절대 깨지지 않는다. loadSiteData와 병렬로 실행되며 다른
-// 렌더링을 기다리게 하지 않는다(await하지 않음).
-function applyDynamicNavMenu() {
+// app_settings(key='nav_menu')를 읽어 검증까지 마친 값을 반환한다. 실패하는 모든 경우
+// (Supabase 미설정·값 없음·파싱 실패·형식 이상)에는 null을 반환한다 — 호출부(nav 렌더링·
+// page-hero 이미지 적용)가 각자 "실패하면 아무것도 안 하고 기존 정적 화면을 그대로 둔다"는
+// 동일한 원칙을 따르도록, 데이터를 가져오는 지점을 하나로 모았다(예전엔 nav 렌더링만 이걸
+// 했는데, page-hero 이미지도 같은 nav_menu 데이터의 그룹별 heroImage를 써야 해서 공용화했다).
+function fetchValidNavMenu() {
   const sb = getSupabaseClient();
-  if (!sb) return;
-  sb.from('app_settings').select('value').eq('key', 'nav_menu').maybeSingle()
+  if (!sb) return Promise.resolve(null);
+  return sb.from('app_settings').select('value').eq('key', 'nav_menu').maybeSingle()
     .then(({ data, error }) => {
-      if (error || !data || !data.value) return;
+      if (error || !data || !data.value) return null;
       let parsed;
       try {
         parsed = JSON.parse(data.value);
       } catch {
-        return;
+        return null;
       }
-      if (!isValidNavMenu(parsed)) return;
-      const nav = document.getElementById('nav');
-      if (!nav) return;
-      nav.innerHTML = buildNavMenuHtml(parsed);
-      initMegaMenu(); // #nav 내용이 통째로 바뀌었으므로 새 .mm-item에 클릭 핸들러를 다시 건다
-      applyInstagramLinkFromSiteData(); // site.json이 이미 로드돼 있었다면 새 인스타그램 링크에도 반영
+      return isValidNavMenu(parsed) ? parsed : null;
     })
-    .catch(() => {});
+    .catch(() => null);
+}
+
+// 관리자가 pages/admin-nav-menu.html에서 저장한 메뉴가 있으면 header.html의 하드코딩된
+// 메뉴를 그것으로 다시 그린다(navMenu가 null이면 아무것도 안 함 — 이미 화면에 떠 있는
+// 정적 메뉴가 그대로 유지되므로 이 함수가 실패해도 사이트는 절대 깨지지 않는다).
+function applyDynamicNavMenu(navMenu) {
+  if (!navMenu) return;
+  const nav = document.getElementById('nav');
+  if (!nav) return;
+  nav.innerHTML = buildNavMenuHtml(navMenu);
+  initMegaMenu(); // #nav 내용이 통째로 바뀌었으므로 새 .mm-item에 클릭 핸들러를 다시 건다
+  applyInstagramLinkFromSiteData(); // site.json이 이미 로드돼 있었다면 새 인스타그램 링크에도 반영
+}
+
+// 현재 페이지(location.pathname)가 nav_menu의 어느 그룹에 속하는지 찾는다. 그룹의 items
+// 안에 현재 경로와 정확히 일치하는 href가 있으면 그 그룹이다. 못 찾으면 undefined.
+function findCurrentPageGroup(navMenu) {
+  const path = location.pathname;
+  return navMenu.groups.find(g => (g.items || []).some(it => it.href === path));
+}
+
+// 이 페이지가 속한 메뉴그룹에 대표이미지(heroImage)가 설정돼 있으면 .page-hero 배경으로
+// 적용한다. ★그룹은 라벨(이름)이 아니라 id로 식별한다(오너 요구사항 — 그룹 이름을 나중에
+// 바꿔도 이미지가 계속 그 그룹을 따라가야 하므로) — findCurrentPageGroup도 items의 href로만
+// 매칭하지 라벨은 전혀 보지 않는다. 이미지가 없거나(null) navMenu 자체가 없으면(폴백 상태)
+// 아무것도 하지 않아 기존 navy 그라데이션이 그대로 유지된다. .style.backgroundImage는
+// innerHTML이 아니라 CSSOM 프로퍼티 대입이라 HTML/스크립트 삽입 위험이 없다 — 다만 URL
+// 자체는 isValidNavMenu(isSafeImageUrl)에서 이미 https:// 스킴만 통과하도록 검증됐다.
+function applyPageHeroImage(navMenu) {
+  if (!navMenu) return;
+  const hero = document.querySelector('.page-hero');
+  if (!hero) return;
+  const group = findCurrentPageGroup(navMenu);
+  if (!group || !group.heroImage) return;
+  // JSON.stringify로 따옴표를 안전하게 이스케이프한다(URL에 " 문자가 섞여있어도 CSS url()
+  // 값이 깨지지 않도록 — 실제로는 Supabase getPublicUrl 결과에 " 가 나올 일이 없지만 방어적으로).
+  hero.style.backgroundImage = `url(${JSON.stringify(group.heroImage)})`;
+  hero.classList.add('has-hero-image');
 }
 
 function injectPartials(callback) {
@@ -361,7 +401,10 @@ function injectPartials(callback) {
     initMegaMenu();
     initMobileNav();
     initPhotoLightbox();
-    applyDynamicNavMenu();
+    fetchValidNavMenu().then(navMenu => {
+      applyDynamicNavMenu(navMenu);
+      applyPageHeroImage(navMenu);
+    });
     if (window.renderMemberAuthArea) renderMemberAuthArea();
     if (callback) callback();
   });
