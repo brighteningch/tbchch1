@@ -68,6 +68,7 @@
       <p class="field-hint">PDF에서 몇 번째 페이지를 미리보기 썸네일 이미지로 보여줄지 지정합니다(기본 1페이지 = 표지). 이미지(JPG) 파일에는 적용되지 않습니다.</p>
       <div class="sermon-form-actions">
         <button type="submit" class="btn btn-primary" id="mg-submit-btn">글 등록</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="mg-cancel-edit-btn" hidden>취소</button>
       </div>
       <p class="auth-error" id="mg-error" hidden></p>
     </form>
@@ -294,6 +295,38 @@ async function generateAndUploadEpubCoverThumbnail(fileOrArrayBuffer, basePath) 
 
 let __mgPosts = [];
 let __mgFilterCategory = '';
+let __mgEditingId = null;
+
+// 수정 버튼 클릭 시 기존 글쓰기 폼에 현재 값을 채워 "수정 모드"로 전환한다. 매거진
+// 게시판(BOARD_REQUIRES_FILE=true)이라도 이미 파일이 있는 글이므로 수정 시 새 파일
+// 선택은 선택사항으로 둔다(파일 미선택 시 기존 파일 유지 — saveEditedPost 참고).
+function startEditPost(id) {
+  const post = __mgPosts.find(p => p.id === id);
+  if (!post) return;
+  __mgEditingId = id;
+  document.getElementById('mg-category').value = post.category || '';
+  document.getElementById('mg-title').value = post.title || '';
+  document.getElementById('mg-body').value = post.body || '';
+  document.getElementById('mg-thumb-page').value = post.thumb_page || 1;
+  document.getElementById('mg-file').value = '';
+  document.getElementById('mg-file').required = false;
+  document.getElementById('mg-submit-btn').textContent = '수정 저장';
+  document.getElementById('mg-cancel-edit-btn').hidden = false;
+  const errorEl = document.getElementById('mg-error');
+  errorEl.hidden = true;
+  document.getElementById('form-magazine').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function exitEditMode() {
+  __mgEditingId = null;
+  document.getElementById('form-magazine').reset();
+  document.getElementById('mg-thumb-page').value = 1;
+  document.getElementById('mg-file').required = BOARD_REQUIRES_FILE;
+  document.getElementById('mg-submit-btn').textContent = '글 등록';
+  document.getElementById('mg-cancel-edit-btn').hidden = true;
+}
+
+document.getElementById('mg-cancel-edit-btn').addEventListener('click', exitEditMode);
 
 function detectFileType(file) {
   const ext = (file.name.split('.').pop() || '').toLowerCase();
@@ -343,11 +376,13 @@ async function loadPostList() {
           <input type="number" class="mg-thumb-page-input" min="1" step="1" value="${p.thumb_page || 1}" data-thumb-page-input="${p.id}">
           <button type="button" class="btn btn-ghost btn-sm" data-regen="${p.id}">썸네일 재생성</button>
         ` : ''}
+        <button type="button" class="btn btn-ghost btn-sm" data-edit="${p.id}">수정</button>
         <button type="button" class="btn btn-ghost btn-sm" data-delete="${p.id}">삭제</button>
       </td>
     </tr>`).join('');
   tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removePost(btn.dataset.delete)));
   tbody.querySelectorAll('[data-regen]').forEach(btn => btn.addEventListener('click', () => regenerateThumbnail(btn.dataset.regen)));
+  tbody.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => startEditPost(btn.dataset.edit)));
 }
 
 async function regenerateThumbnail(id) {
@@ -422,6 +457,130 @@ document.getElementById('mg-filter-category').addEventListener('change', (e) => 
   loadPostList();
 });
 
+// 신규 등록. 기존 인라인 제출 핸들러에서 그대로 추출한 로직이다 — 이 과정에서
+// ★버그 수정 1건 발견·수정: 썸네일 생성 호출(옛 471·487줄)이 `path`라는, 위
+// `if (file) { }` 블록 안에서만 선언된(블록 스코프) 변수를 블록 밖에서 참조하고
+// 있었다. 실제로는 ReferenceError가 나서 곧바로 catch(thumbErr)로 떨어져
+// "썸네일 생성 실패" 알림이 항상 뜨고 있었다(글 등록 자체는 성공하지만 최초
+// 썸네일 생성은 매번 조용히 실패 → 관리자가 매번 "썸네일 재생성" 버튼을 눌러야
+// 했던 원인). 이미 올바른 스코프로 살아있는 filePath로 바꿔 고쳤다(과제 범위인
+// 수정 기능과 무관한 별도 발견 — master에게 별도 보고).
+async function createNewPost({ category, title, body, file, fileType }) {
+  const thumbPage = Math.max(1, parseInt(document.getElementById('mg-thumb-page').value, 10) || 1);
+  let fileUrl = null, filePath = null;
+
+  if (file) {
+    const sb = requireSupabaseClient();
+    const ext = (file.name.split('.').pop() || (fileType === 'pdf' ? 'pdf' : 'jpg')).toLowerCase();
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: uploadError } = await sb.storage.from(MAGAZINE_BUCKET).upload(path, file, { upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(path);
+    fileUrl = pub.publicUrl;
+    filePath = path;
+  }
+
+  const created = await createMagazinePost({
+    category, title, body: body || null, board: BOARD,
+    file_url: fileUrl, file_path: filePath, file_type: fileType,
+    thumb_page: thumbPage,
+  });
+
+  if (fileType === 'pdf') {
+    try {
+      const thumbInfo = await generateAndUploadThumbnail(file, thumbPage, filePath);
+      await updateMagazinePost(created.id, {
+        thumb_page: thumbPage,
+        thumbnail_url: thumbInfo.thumbnail_url,
+        thumbnail_path: thumbInfo.thumbnail_path,
+      });
+    } catch (thumbErr) {
+      // 글 자체는 이미 정상 등록됐다 — 썸네일만 실패한 것이므로 등록을 되돌리지 않고
+      // 기존 📄 아이콘 폴백으로 보이게 두고 관리자에게 알린다(목록의 재생성 버튼으로 재시도 가능).
+      console.error('썸네일 생성 실패(글은 정상 등록됨):', thumbErr);
+      alert('글은 등록되었지만 썸네일 생성에 실패했습니다. 목록에서 "썸네일 재생성" 버튼으로 다시 시도해주세요: ' + thumbErr.message);
+    }
+  } else if (fileType === 'epub') {
+    try {
+      const thumbInfo = await generateAndUploadEpubCoverThumbnail(file, filePath);
+      if (thumbInfo) {
+        await updateMagazinePost(created.id, {
+          thumbnail_url: thumbInfo.thumbnail_url,
+          thumbnail_path: thumbInfo.thumbnail_path,
+        });
+      }
+      // thumbInfo가 null이면 표지 정보가 없는 정상적인 epub이므로 조용히 넘어간다
+      // (기존 📖 폴백 유지 — 에러 아님).
+    } catch (thumbErr) {
+      console.error('EPUB 표지 추출 실패(글은 정상 등록됨):', thumbErr);
+      alert('글은 등록되었지만 표지 추출에 실패했습니다(책 아이콘으로 표시됩니다): ' + thumbErr.message);
+    }
+  }
+}
+
+// 수정 저장. 텍스트 필드(카테고리/제목/본문)는 항상 갱신한다. 파일을 새로 고르지
+// 않으면 기존 file_url/file_path/thumbnail 등은 그대로 둔다(매거진 게시판처럼
+// 파일 필수인 글도 수정 시 파일 재첨부를 강제하지 않기 위함). 새 파일을 고르면
+// createNewPost와 동일한 업로드+썸네일 파이프라인을 태우고, 성공적으로 새 파일이
+// 반영된 뒤 옛 원본 파일과 옛 썸네일을 Storage에서 정리해 고아 파일을 남기지
+// 않는다(이 프로젝트가 과거 겪은 고아 파일 버그 재발 방지 — removePost와 동일 원칙).
+async function saveEditedPost(id, { category, title, body, file, fileType }) {
+  const post = __mgPosts.find(p => p.id === id);
+  const payload = { category, title, body: body || null };
+
+  if (file) {
+    const thumbPage = Math.max(1, parseInt(document.getElementById('mg-thumb-page').value, 10) || 1);
+    const sb = requireSupabaseClient();
+    const ext = (file.name.split('.').pop() || (fileType === 'pdf' ? 'pdf' : 'jpg')).toLowerCase();
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: uploadError } = await sb.storage.from(MAGAZINE_BUCKET).upload(path, file, { upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(path);
+    payload.file_url = pub.publicUrl;
+    payload.file_path = path;
+    payload.file_type = fileType;
+    payload.thumb_page = thumbPage;
+    payload.thumbnail_url = null;
+    payload.thumbnail_path = null;
+
+    if (fileType === 'pdf') {
+      try {
+        const thumbInfo = await generateAndUploadThumbnail(file, thumbPage, path);
+        payload.thumbnail_url = thumbInfo.thumbnail_url;
+        payload.thumbnail_path = thumbInfo.thumbnail_path;
+      } catch (thumbErr) {
+        console.error('썸네일 생성 실패(글 수정은 계속 진행):', thumbErr);
+        alert('파일은 교체되었지만 썸네일 생성에 실패했습니다. 목록에서 "썸네일 재생성" 버튼으로 다시 시도해주세요: ' + thumbErr.message);
+      }
+    } else if (fileType === 'epub') {
+      try {
+        const thumbInfo = await generateAndUploadEpubCoverThumbnail(file, path);
+        if (thumbInfo) {
+          payload.thumbnail_url = thumbInfo.thumbnail_url;
+          payload.thumbnail_path = thumbInfo.thumbnail_path;
+        }
+      } catch (thumbErr) {
+        console.error('EPUB 표지 추출 실패(글 수정은 계속 진행):', thumbErr);
+        alert('파일은 교체되었지만 표지 추출에 실패했습니다(책 아이콘으로 표시됩니다): ' + thumbErr.message);
+      }
+    }
+  }
+
+  await updateMagazinePost(id, payload);
+
+  if (file && post && post.file_path) {
+    try {
+      const sb = requireSupabaseClient();
+      const staleFiles = [post.file_path];
+      if (post.thumbnail_path) staleFiles.push(post.thumbnail_path);
+      await sb.storage.from(MAGAZINE_BUCKET).remove(staleFiles);
+    } catch (cleanupErr) {
+      // 새 파일 반영은 이미 끝났다 — 옛 파일 정리 실패는 수정 성공 자체를 막지 않는다.
+      console.error('옛 파일 정리 실패(수정은 정상 반영됨):', cleanupErr);
+    }
+  }
+}
+
 document.getElementById('form-magazine').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errorEl = document.getElementById('mg-error');
@@ -432,7 +591,7 @@ document.getElementById('form-magazine').addEventListener('submit', async (e) =>
   const file = document.getElementById('mg-file').files[0];
   const submitBtn = document.getElementById('mg-submit-btn');
   if (!category || !title) return;
-  if (BOARD_REQUIRES_FILE && !file) {
+  if (!__mgEditingId && BOARD_REQUIRES_FILE && !file) {
     errorEl.textContent = '파일을 첨부해주세요.';
     errorEl.hidden = false;
     return;
@@ -445,70 +604,24 @@ document.getElementById('form-magazine').addEventListener('submit', async (e) =>
     return;
   }
 
+  const wasEditing = !!__mgEditingId;
   submitBtn.disabled = true;
-  submitBtn.textContent = '업로드 중…';
+  submitBtn.textContent = wasEditing ? '저장 중…' : '업로드 중…';
   try {
-    const thumbPage = Math.max(1, parseInt(document.getElementById('mg-thumb-page').value, 10) || 1);
-    let fileUrl = null, filePath = null;
-
-    if (file) {
-      const sb = requireSupabaseClient();
-      const ext = (file.name.split('.').pop() || (fileType === 'pdf' ? 'pdf' : 'jpg')).toLowerCase();
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error: uploadError } = await sb.storage.from(MAGAZINE_BUCKET).upload(path, file, { upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(path);
-      fileUrl = pub.publicUrl;
-      filePath = path;
+    if (wasEditing) {
+      await saveEditedPost(__mgEditingId, { category, title, body, file, fileType });
+    } else {
+      await createNewPost({ category, title, body, file, fileType });
     }
-
-    const created = await createMagazinePost({
-      category, title, body: body || null, board: BOARD,
-      file_url: fileUrl, file_path: filePath, file_type: fileType,
-      thumb_page: thumbPage,
-    });
-
-    if (fileType === 'pdf') {
-      try {
-        const thumbInfo = await generateAndUploadThumbnail(file, thumbPage, path);
-        await updateMagazinePost(created.id, {
-          thumb_page: thumbPage,
-          thumbnail_url: thumbInfo.thumbnail_url,
-          thumbnail_path: thumbInfo.thumbnail_path,
-        });
-      } catch (thumbErr) {
-        // 글 자체는 이미 정상 등록됐다 — 썸네일만 실패한 것이므로 등록을 되돌리지 않고
-        // 기존 📄 아이콘 폴백으로 보이게 두고 관리자에게 알린다(목록의 재생성 버튼으로 재시도 가능).
-        console.error('썸네일 생성 실패(글은 정상 등록됨):', thumbErr);
-        alert('글은 등록되었지만 썸네일 생성에 실패했습니다. 목록에서 "썸네일 재생성" 버튼으로 다시 시도해주세요: ' + thumbErr.message);
-      }
-    } else if (fileType === 'epub') {
-      try {
-        const thumbInfo = await generateAndUploadEpubCoverThumbnail(file, path);
-        if (thumbInfo) {
-          await updateMagazinePost(created.id, {
-            thumbnail_url: thumbInfo.thumbnail_url,
-            thumbnail_path: thumbInfo.thumbnail_path,
-          });
-        }
-        // thumbInfo가 null이면 표지 정보가 없는 정상적인 epub이므로 조용히 넘어간다
-        // (기존 📖 폴백 유지 — 에러 아님).
-      } catch (thumbErr) {
-        console.error('EPUB 표지 추출 실패(글은 정상 등록됨):', thumbErr);
-        alert('글은 등록되었지만 표지 추출에 실패했습니다(책 아이콘으로 표시됩니다): ' + thumbErr.message);
-      }
-    }
-
-    document.getElementById('form-magazine').reset();
-    document.getElementById('mg-thumb-page').value = 1;
+    exitEditMode();
     await loadPostList();
     await refreshCategoryOptions();
   } catch (err) {
-    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
+    errorEl.textContent = (wasEditing ? '수정' : '등록') + ' 중 오류가 발생했습니다: ' + err.message;
     errorEl.hidden = false;
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = '글 등록';
+    submitBtn.textContent = wasEditing ? '수정 저장' : '글 등록';
   }
 });
 
