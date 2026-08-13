@@ -106,18 +106,25 @@ function escMagazine(s) { return (s || '').toString().replace(/&/g, '&amp;').rep
 // 전부(개수 제한 없음) 오른쪽에 최신 글 1건씩 작은 미리보기로 나열한다.
 const MAGAZINE_FEATURED_CATEGORY = '교회뉴스';
 
+function magazineBadgeText(post) {
+  if (post.file_type === 'pdf') return 'PDF';
+  if (post.file_type === 'epub') return 'EPUB';
+  return '사진';
+}
+
 function renderMagazinePostBody(post) {
   return `
     <div>
       <p class="magazine-post-title">${escMagazine(post.title)}</p>
       <p class="magazine-post-date">${(post.created_at || '').slice(0, 10)}</p>
     </div>
-    <span class="magazine-post-badge">${post.file_type === 'pdf' ? 'PDF' : '사진'}</span>`;
+    <span class="magazine-post-badge">${magazineBadgeText(post)}</span>`;
 }
 
 // 이미지 글은 file_url을 그대로 썸네일로 쓰고, PDF 글은 관리자가 지정 페이지를 미리
 // 렌더링해둔 thumbnail_url이 있으면 그걸 쓴다 — 아직 재생성 전(구 글)이라 thumbnail_url이
-// 없으면 기존 📄 아이콘 폴백을 유지한다(깨진 이미지 대신 안전한 대체 표시).
+// 없으면 기존 📄 아이콘 폴백을 유지한다(깨진 이미지 대신 안전한 대체 표시). EPUB은
+// 표지 추출을 안 하므로(news-magazine.html과 동일 정책) 📖 아이콘으로 PDF와 구분한다.
 function magazineThumbHtml(post, thumbClass) {
   if (post.file_type === 'image') {
     return `<div class="${thumbClass}"><img src="${post.file_url}" alt="${escMagazine(post.title)}" loading="lazy"></div>`;
@@ -125,13 +132,24 @@ function magazineThumbHtml(post, thumbClass) {
   if (post.thumbnail_url) {
     return `<div class="${thumbClass}"><img src="${post.thumbnail_url}" alt="${escMagazine(post.title)}" loading="lazy"></div>`;
   }
+  if (post.file_type === 'epub') {
+    return `<div class="${thumbClass} ${thumbClass}--pdf">📖</div>`;
+  }
   return `<div class="${thumbClass} ${thumbClass}--pdf">📄</div>`;
+}
+
+// 홈페이지 미리보기 카드는 라이트박스(EPUB 인앱 리더 등)를 갖고 있지 않으므로, 원본
+// file_url로 바로 링크하면 EPUB은 브라우저가 그냥 다운로드하거나 못 열어 "미리보기가
+// 안 된다"는 오해를 만든다(2026-08-13 오너 신고로 발견). EPUB 글만 라이트박스가 있는
+// news-magazine.html로 보내고, PDF/이미지는 기존처럼 원본 파일로 바로 연다.
+function magazineCardHref(post) {
+  return post.file_type === 'epub' ? '/pages/news-magazine.html' : post.file_url;
 }
 
 function renderMagazineFeaturedCard(post) {
   if (!post) return '<p class="magazine-empty">아직 등록된 글이 없습니다.</p>';
   return `
-    <a class="magazine-post-card magazine-post-card--featured" href="${post.file_url}" target="_blank" rel="noopener">
+    <a class="magazine-post-card magazine-post-card--featured" href="${magazineCardHref(post)}" target="_blank" rel="noopener">
       <span class="magazine-home-featured-cat">${escMagazine(post.category)}</span>
       ${magazineThumbHtml(post, 'magazine-home-featured-thumb')}
       ${renderMagazinePostBody(post)}
@@ -144,7 +162,7 @@ function renderMagazineFeaturedCard(post) {
 // 실제로 내용이 보이는 크기를 확보한다.
 function renderMagazineOtherItem(category, post) {
   return `
-    <a class="magazine-post-card magazine-post-card--other" href="${post.file_url}" target="_blank" rel="noopener">
+    <a class="magazine-post-card magazine-post-card--other" href="${magazineCardHref(post)}" target="_blank" rel="noopener">
       <span class="magazine-home-other-cat">${escMagazine(category)}</span>
       ${magazineThumbHtml(post, 'magazine-home-other-thumb')}
       <div class="magazine-home-other-body">
