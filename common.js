@@ -314,10 +314,39 @@ function isValidNavMenu(data) {
       g.items.every(it => it && typeof it.label === 'string' && isSafeNavHref(it.href)));
 }
 
+// 로그인 게이팅(오너 확정 2026-08-13): 메뉴 6개 그룹 중 '환영합니다'·'설교와 찬양'은 계속
+// 비로그인 전체공개. 아래 3개 그룹은 통째로 비로그인 방문자에게 숨긴다(다음세대/교회소식/
+// 지역자료실 — RLS로 이미 로그인전용인 테이블만 담고 있어 그룹 전체를 잠가도 안전).
+// '공동체 & 양육' 그룹은 그룹 자체는 계속 보이되, 그 안의 3항목(교재/가정교회/중보기도)만
+// 개별로 숨긴다 — 나머지 2항목(묵상과 삶/성경공부)은 외부 티스토리 블로그라 Supabase
+// 테이블이 없어 RLS로 막을 대상 자체가 없으므로 계속 공개.
+// ★이 목록은 UI 편의 힌트일 뿐이다 — 실제 방어선은 각 테이블 RLS(supabase/access_gating_schema.sql).
+// 그룹/href가 여기서 빠지거나 잘못돼도 RLS가 서버측에서 최종 방어한다.
+const LOGIN_GATED_GROUP_IDS = [
+  '2d924573-53c3-463f-b129-2d350074c5e3', // 다음세대
+  '29659d08-626c-4bbf-a043-7f1ae34b3b5b', // 교회소식
+  'b254ec20-8538-4ea6-88b4-3003528a890e', // 지역자료실
+];
+const LOGIN_GATED_ITEM_HREFS = [
+  '/pages/community-editorial.html', // 양육과 훈련 자료(교재)
+  '/pages/community-home.html',      // 가정교회 및 가정 모임 자료
+  '/pages/prayer-request.html',      // 중보기도요청
+];
+
 // nav_menu 데이터(그룹 배열)로 #nav 안의 메가메뉴 마크업을 header.html의 정적 버전과
 // 동일한 클래스 구조(mm-item/mm-trigger/mm-chevron/mm-panel)로 다시 만든다.
-function buildNavMenuHtml(navMenu) {
-  return navMenu.groups.map((g, i) => {
+// isLoggedIn이 false면 위 게이팅 목록에 해당하는 그룹/항목을 먼저 걸러낸 뒤 렌더링한다
+// (필터링을 map보다 먼저 해서, 인스타그램 링크가 붙는 인덱스 i===4가 로그인 시(필터 없음,
+// 원래 순서 그대로 6개)에는 여전히 '교회소식'을 정확히 가리키고, 비로그인 시(교회소식 자체가
+// 걸러져 사라짐)에는 i===4가 어느 그룹에도 매칭되지 않아 인스타그램 링크도 자연히 함께 숨겨진다).
+function buildNavMenuHtml(navMenu, isLoggedIn) {
+  const groups = navMenu.groups
+    .filter(g => isLoggedIn || !LOGIN_GATED_GROUP_IDS.includes(g.id))
+    .map(g => isLoggedIn ? g : {
+      ...g,
+      items: (g.items || []).filter(it => !LOGIN_GATED_ITEM_HREFS.includes(it.href))
+    });
+  return groups.map((g, i) => {
     const itemsHtml = (g.items || [])
       .map(it => `<a href="${escNav(it.href)}">${escNav(it.label)}</a>`)
       .join('');
@@ -359,11 +388,11 @@ function fetchValidNavMenu() {
 // 관리자가 pages/admin-nav-menu.html에서 저장한 메뉴가 있으면 header.html의 하드코딩된
 // 메뉴를 그것으로 다시 그린다(navMenu가 null이면 아무것도 안 함 — 이미 화면에 떠 있는
 // 정적 메뉴가 그대로 유지되므로 이 함수가 실패해도 사이트는 절대 깨지지 않는다).
-function applyDynamicNavMenu(navMenu) {
+function applyDynamicNavMenu(navMenu, isLoggedIn) {
   if (!navMenu) return;
   const nav = document.getElementById('nav');
   if (!nav) return;
-  nav.innerHTML = buildNavMenuHtml(navMenu);
+  nav.innerHTML = buildNavMenuHtml(navMenu, isLoggedIn);
   initMegaMenu(); // #nav 내용이 통째로 바뀌었으므로 새 .mm-item에 클릭 핸들러를 다시 건다
   applyInstagramLinkFromSiteData(); // site.json이 이미 로드돼 있었다면 새 인스타그램 링크에도 반영
 }
@@ -395,6 +424,20 @@ function applyPageHeroImage(navMenu) {
   hero.classList.add('has-hero-image');
 }
 
+// 메뉴 게이팅(buildNavMenuHtml/applyDynamicNavMenu)만을 위한 가벼운 로그인 여부 확인.
+// renderMemberAuthArea가 쓰는 getCurrentProfile()은 profiles 테이블까지 다시 조회해서
+// 로그인 영역(이름·관리자 메뉴)을 그리는 무거운 호출이라, 메뉴 렌더링은 세션 유무만 보는
+// getSession()으로 분리해 왕복을 하나 줄인다. Supabase 미설정·오류 시에는 false(비로그인
+// 취급)로 안전하게 폴백 — 실제 접근 차단은 어차피 RLS가 서버측에서 하므로, 메뉴가 잘못
+// false로 떨어져도 "보여야 할 메뉴가 안 보이는" 정도의 UX 저하일 뿐 보안 구멍은 아니다.
+function isMemberLoggedIn() {
+  const sb = getSupabaseClient();
+  if (!sb) return Promise.resolve(false);
+  return sb.auth.getSession()
+    .then(({ data }) => !!(data && data.session))
+    .catch(() => false);
+}
+
 function injectPartials(callback) {
   const headerHost = document.getElementById('headerHost');
   const footerHost = document.getElementById('footerHost');
@@ -407,8 +450,8 @@ function injectPartials(callback) {
     initMegaMenu();
     initMobileNav();
     initPhotoLightbox();
-    fetchValidNavMenu().then(navMenu => {
-      applyDynamicNavMenu(navMenu);
+    Promise.all([fetchValidNavMenu(), isMemberLoggedIn()]).then(([navMenu, isLoggedIn]) => {
+      applyDynamicNavMenu(navMenu, isLoggedIn);
       applyPageHeroImage(navMenu);
     });
     if (window.renderMemberAuthArea) renderMemberAuthArea();

@@ -141,7 +141,7 @@ document.getElementById('gallery-tabs').addEventListener('click', (e) => {
   initPhotoLightbox();
   try {
     const profile = await getCurrentProfile();
-    if (profile && profile.is_admin) {
+    if (profile) {
       document.getElementById('galleryWriteBtn').hidden = false;
     }
   } catch (err) { /* 로그인 안 한 방문자는 무시 */ }

@@ -1,5 +1,6 @@
 // 포토갤러리(자체 저장) CRUD — gallery_albums / gallery_photos
-// 읽기는 누구나, 쓰기는 RLS로 is_admin()만 가능하도록 DB에서 강제되어 있다(supabase/gallery_schema.sql).
+// 읽기는 로그인 회원만, 업로드는 로그인 회원 누구나, 수정/삭제는 본인 또는 관리자만 가능하도록
+// RLS로 DB에서 강제되어 있다(supabase/access_gating_schema.sql, 2026-08-13 회원개방).
 
 async function fetchGalleryAlbums(category) {
   const sb = getSupabaseClient();
