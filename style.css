@@ -1695,24 +1695,10 @@ section { padding: 88px 0; }
 .community-title a:hover { color: var(--navy); text-decoration: underline; }
 .community-empty { text-align: center; color: var(--text-gray); padding: 30px 0; }
 
-/* ---------- 지역자료실(성도 사업처 · 계룡시 지역 사업처) 글 목록 ---------- */
-.biz-post-list { display: flex; flex-direction: column; gap: 14px; }
-.biz-post-card {
-  display: flex; gap: 16px; align-items: flex-start;
-  background: #fff; border-radius: 14px; padding: 16px;
-  box-shadow: 0 6px 18px rgba(15,40,70,0.06);
-}
-.biz-post-thumb { width: 96px; height: 96px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: var(--bg-cool); }
-.biz-post-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.biz-post-body { flex: 1; min-width: 0; }
-.biz-post-title { font-weight: 700; font-size: 15.5px; margin-bottom: 4px; }
-.biz-post-meta { font-size: 12.5px; color: var(--text-gray); margin-bottom: 8px; }
-.biz-post-text { font-size: 14px; color: var(--text-dark); line-height: 1.55; white-space: pre-wrap; }
-.biz-post-delete { flex-shrink: 0; }
-@media (max-width: 560px) {
-  .biz-post-card { flex-wrap: wrap; }
-  .biz-post-delete { margin-left: auto; }
-}
+/* ---------- 지역자료실(성도 사업처 · 계룡시 지역 사업처) 글 목록 ----------
+   ★2026-08-13: 전체나열 카드 방식에서 news-magazine.html과 동일한 카드/라이트박스
+   패턴(magazine-nm-*, nm-lightbox-*)으로 전환하면서 이 전용 CSS는 더 이상 쓰이지
+   않아 제거함(재사용 클래스 정의는 위 magazine-nm-*/nm-lightbox-* 규칙 참고). */
 
 .community-form { display: flex; flex-direction: column; gap: 16px; }
 .community-form[hidden] { display: none; }

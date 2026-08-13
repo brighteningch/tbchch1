@@ -300,6 +300,17 @@ function isSafeImageUrl(url) {
   return url === null || (typeof url === 'string' && url.trim().startsWith(NAV_HERO_IMAGE_URL_PREFIX));
 }
 
+// ★2026-08-13(지역자료실 지도 링크): 지도 링크는 항상 target="_blank"로 열리는 외부
+// 링크일 뿐, 이 사이트 내부 경로나 mailto:/tel:일 이유가 없다 — 그래서 isSafeNavHref
+// (내부경로·mailto·tel·앵커까지 허용하는 범용 nav 검증)보다 더 좁게 https:// 스킴만
+// 허용한다(오너 명시: "최소한 https://만 허용"). 저장(글쓰기 폼 제출) 시점과 렌더(카드/
+// 라이트박스 표시) 시점 양쪽에서 이 함수로 검사한다 — 저장 시 통과했더라도 다른 경로로
+// 데이터가 들어왔을 가능성에 대비한 이중 방어(isSafeNavHref를 isValidNavMenu 렌더링
+// 검증에도 같이 쓰는 것과 동일한 원칙).
+function isSafeMapUrl(url) {
+  return typeof url === 'string' && /^https:\/\//i.test(url.trim());
+}
+
 // app_settings(key='nav_menu')에서 불러온 값이 렌더링해도 안전한 형태인지 검사한다.
 // 이 검사를 통과 못하면 applyDynamicNavMenu는 아무것도 하지 않고 header.html의 하드코딩된
 // 메뉴를 그대로 둔다 — "값이 없거나 파싱 실패해도 사이트가 절대 깨지면 안 된다"는 요구사항의

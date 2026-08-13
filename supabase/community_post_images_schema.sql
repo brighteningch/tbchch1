@@ -8,6 +8,17 @@
 alter table community_posts add column if not exists image_url text;
 alter table community_posts add column if not exists image_path text;
 
+-- ★2026-08-13(오너 요청): 업체소개 글에 위치 확인용 지도 링크(다음지도 등에서 위치
+-- 검색 후 나온 URL)를 첨부할 수 있게 한다. nullable — 기존 글·다른 board는 영향 없음.
+-- 스킴 화이트리스트(https://만 허용)는 클라이언트(admin/작성 폼 + 렌더링)에서
+-- common.js의 isSafeMapUrl()로 강제한다 — nav_menu href 검증과 동일한 원칙(저장 시점과
+-- 렌더 시점 양쪽 검사)이며, DB 컬럼 자체는 이 프로젝트의 다른 텍스트 필드들과 마찬가지로
+-- 스킴을 제약하지 않는 평범한 text다(CHECK 제약으로 스킴을 강제하지 않은 이유: XSS 방어의
+-- 본질은 "렌더링 시점에 위험한 스킴을 href로 내보내지 않는 것"이지 "DB에 애초에 못 들어가게
+-- 막는 것"이 아니다 — 이미 이 프로젝트의 isSafeNavHref/isSafeImageUrl도 전부 렌더링 단계
+-- 방어이며 DB CHECK로 중복하지 않는다).
+alter table community_posts add column if not exists map_url text;
+
 -- ★2026-08-12 실측 중 발견한 스키마 드리프트 대응: supabase-schema.sql 파일에는
 -- community_posts의 select 정책이 `for select using (true)`(anon 포함 전체공개)로
 -- 적혀 있지만, 실제 라이브 DB를 REST API로 직접 실측한 결과 지금은 `to authenticated`로
