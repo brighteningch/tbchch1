@@ -318,6 +318,15 @@ body {
    페이지 버튼은 리더 위에 떠 있는 원형 버튼으로 배치한다. */
 /* height:100%는 .nm-lightbox-body가 max-height뿐인 auto-height flex 부모라 0으로
    붕괴한다(img/iframe 규칙이 %가 아니라 78vh 고정값을 쓰는 이유와 동일) — 같은 78vh를 쓴다. */
+/* ★2026-08-13(긴급 후속): flow:'scrolled-doc' 검토 중 확인 — epub.js는 renderTo()가
+   넘겨준 컨테이너(#nm-epub-viewport) 안에 자기 전용 스크롤 컨테이너
+   (.epub-container, overflow:auto가 이미 인라인으로 설정됨)를 직접 만들어 그 안에서
+   내부 스크롤을 처리한다. 즉 콘텐츠가 뷰포트보다 길어도 그 오버플로는
+   .epub-container 내부에 갇혀 있어서(실측: scrollHeight 841 vs clientHeight 702,
+   scrollTop 조작 시 실제로 움직임 확인) .nm-epub-wrap/.nm-epub-viewport 쪽에
+   overflow-y:auto를 따로 줄 필요가 없다 — 처음엔 필요하다고 판단해 추가했다가,
+   실측해보니 실제 오버플로 지점이 한 단계 더 안쪽이라는 걸 확인하고 불필요한
+   중복 스크롤 컨텍스트를 만들지 않도록 되돌렸다. */
 .nm-epub-wrap { position: relative; width: 100%; height: 78vh; background: #fff; }
 .nm-epub-viewport { width: 100%; height: 100%; }
 .nm-epub-nav {

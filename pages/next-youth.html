@@ -149,7 +149,13 @@ async function loadEpubReader(post, generation) {
     await Promise.race([
       (async () => {
         __nmEpubBook = ePub(post.file_url);
-        const rendition = __nmEpubBook.renderTo('nm-epub-viewport', { width: '100%', height: '100%', allowScriptedContent: false });
+        // ★2026-08-13(긴급 후속): 오너가 신고한 "EPUB이 제대로 안 보인다"를 실제 파일
+        // 압축해제해서 원인을 확인 — 기본 paginated(고정 페이지 분할) 방식에서는 표지
+        // (이미지+제목+본문)가 한 화면에 다 안 들어가 2페이지로 쪼개지고, 그 2페이지째가
+        // 메타줄 한 줄만 남아 거의 빈 화면으로 보였다. flow:'scrolled-doc'(연속 스크롤)로
+        // 바꾸면 뷰포트 높이에 맞춰 어색하게 끊기지 않고 이어져서 이 문제 자체가 구조적으로
+        // 없어진다 — next()/prev()는 이제 챕터(cover→guide→ch1→ch2) 단위로 이동한다.
+        const rendition = __nmEpubBook.renderTo('nm-epub-viewport', { width: '100%', height: '100%', flow: 'scrolled-doc', allowScriptedContent: false });
         await rendition.display();
         if (generation !== __nmEpubGeneration) return;
         bodyEl.querySelector('.nm-epub-nav--prev')?.addEventListener('click', () => rendition.prev());
