@@ -26,9 +26,20 @@ alter table magazine_posts add column if not exists file_path text;
 
 alter table magazine_posts enable row level security;
 
--- 읽기는 누구나(홈페이지 방문자), 쓰기는 관리자만 (기존 is_admin() 함수 재사용 — supabase-schema.sql)
+-- ★2026-08-14 직접 발견·수정: 이 SELECT 정책은 원래 "읽기는 누구나"였으나, 같은 날 밤
+-- access_gating_schema.sql이 매거진 게시판을 로그인 전용 읽기로 전환하면서 이 정책을
+-- drop하고 "magazine_posts authenticated read"(roles=authenticated)로 교체했다. 그런데
+-- 이 파일 자체는 그 사실을 반영하지 않은 채로 남아있었고, 이 파일 상단 안내대로 "파일
+-- 전체를 그대로 실행"하면(교회학교/청청 개방 작업 중 실제로 재실행됨) 아래 두 줄이 다시
+-- 실행되어 로그인 게이팅을 무력화하는 낡은 공개읽기 정책을 되살려버렸다(실측: anon 키로
+-- REST 직접 조회 성공 확인 후 즉시 차단·재확인 완료). PostgreSQL의 permissive 정책은
+-- OR로 합쳐지므로 이 정책 하나만 살아있어도 다른 로그인전용 정책과 무관하게 뚫린다.
+-- 재발 방지를 위해 이 파일 자체를 최신 정책(authenticated read)으로 맞춘다 — 이제 이
+-- 파일을 몇 번을 재실행해도 access_gating_schema.sql이 만든 최신 상태와 항상 일치한다.
 drop policy if exists "magazine_posts read all" on magazine_posts;
-create policy "magazine_posts read all" on magazine_posts for select using (true);
+drop policy if exists "magazine_posts authenticated read" on magazine_posts;
+create policy "magazine_posts authenticated read" on magazine_posts
+  for select to authenticated using (true);
 drop policy if exists "magazine_posts admin insert" on magazine_posts;
 create policy "magazine_posts admin insert" on magazine_posts for insert with check (is_admin());
 drop policy if exists "magazine_posts admin update" on magazine_posts;
