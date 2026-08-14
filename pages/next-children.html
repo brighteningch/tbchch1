@@ -547,6 +547,11 @@ async function loadBoardPage() {
     if (posts.length === 0) {
       catListEl.innerHTML = '';
       sectionsEl.innerHTML = '';
+      // 이 게시판은 로그인 전용 읽기라, 글이 실제로 하나도 없는 것과 "로그인을 안 해서
+      // RLS에 막혀 아무것도 안 보이는 것"을 구분해줘야 방문자가 혼동하지 않는다.
+      emptyEl.innerHTML = (await isLoggedIn())
+        ? '아직 등록된 글이 없습니다.'
+        : '로그인 후 이용할 수 있는 게시판입니다. <a href="/pages/login.html">로그인하기</a>';
       emptyEl.hidden = false;
       return;
     }

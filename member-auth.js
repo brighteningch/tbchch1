@@ -114,6 +114,16 @@ async function getCurrentProfile() {
   }
 }
 
+// 로그인 여부만 필요한 곳(프로필 행 존재는 불필요)에서 쓰는 가벼운 세션 확인.
+// 로그인 게이팅된 게시판(매거진/다음세대/지역자료실)에서 비로그인 방문자에게
+// "글이 없습니다" 대신 "로그인이 필요합니다" 안내를 보여주기 위해 추가.
+async function isLoggedIn() {
+  const sb = getSupabaseClient();
+  if (!sb) return false;
+  const { data: { session } } = await sb.auth.getSession();
+  return !!session;
+}
+
 // 헤더의 로그인 영역을 현재 로그인 상태에 맞게 그린다
 async function renderMemberAuthArea() {
   const area = document.getElementById("memberAuthArea");
