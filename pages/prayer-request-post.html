@@ -29,6 +29,7 @@
     <div class="sermon-image-grid" id="postImageGrid" hidden></div>
     <div class="sermon-form-actions" style="margin-top:24px;">
       <a href="/pages/prayer-request.html" class="btn btn-ghost">목록으로</a>
+      <a href="#" class="btn btn-ghost" id="postEditLink" hidden>수정</a>
       <button type="button" class="btn btn-ghost" id="postDeleteBtn" hidden>삭제</button>
     </div>
   </div>
@@ -105,6 +106,10 @@ const idParam = params.get('id') || '';
     }
 
     if (profile.id === post.author_id || profile.is_admin) {
+      const editLink = document.getElementById('postEditLink');
+      editLink.hidden = false;
+      editLink.href = `/pages/prayer-request-write.html?edit=${encodeURIComponent(post.id)}`;
+
       const delBtn = document.getElementById('postDeleteBtn');
       delBtn.hidden = false;
       delBtn.addEventListener('click', async () => {

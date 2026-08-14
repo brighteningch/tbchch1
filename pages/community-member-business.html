@@ -19,6 +19,7 @@
   #nm-detail-view .nm-lightbox-body { overflow: visible; }
   #nm-detail-view .nm-lightbox-body img { max-height: none; height: auto; }
   .nm-detail-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+  .field-hint { font-size: 12.5px; color: var(--text-gray); margin-top: -8px; }
 </style>
 </head>
 <body>
@@ -51,8 +52,10 @@
     <label>지도 링크 (선택)
       <input type="url" id="biz-map-url" placeholder="다음지도 등에서 위치 검색 후 나온 https:// 링크 주소">
     </label>
+    <p class="field-hint" id="biz-edit-hint" hidden>글을 수정하는 중입니다.</p>
     <div class="sermon-form-actions">
       <button type="submit" class="btn btn-primary" id="biz-submit-btn">글 등록</button>
+      <button type="button" class="btn btn-ghost" id="biz-cancel-edit-btn" hidden>수정 취소</button>
     </div>
     <p class="auth-error" id="biz-error" hidden></p>
   </form>
@@ -67,6 +70,7 @@
     <div class="nm-lightbox-header">
       <p class="nm-lightbox-title" id="nm-lightbox-title"></p>
       <div class="nm-lightbox-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="nm-lightbox-edit" hidden>수정</button>
         <button type="button" class="btn btn-ghost btn-sm" id="nm-lightbox-delete" hidden>삭제</button>
       </div>
     </div>
@@ -134,6 +138,7 @@ function canDeleteBizPost(post) {
 function openBizLightbox(post) {
   const titleEl = document.getElementById('nm-lightbox-title');
   const bodyEl = document.getElementById('nm-lightbox-body');
+  const editEl = document.getElementById('nm-lightbox-edit');
   const deleteEl = document.getElementById('nm-lightbox-delete');
   titleEl.textContent = post.title;
   // isSafeMapUrl(common.js): 저장 시점(제출 핸들러)에 이미 https://만 통과시켰지만,
@@ -152,9 +157,11 @@ function openBizLightbox(post) {
       <p style="white-space:pre-wrap;">${escBiz(post.body)}</p>
       ${mapButtonHtml}
     </div>`;
-  // 삭제 버튼은 카드(<button> 안에 <button> 중첩이 되어 HTML상 유효하지 않고 클릭 이벤트도
-  // 라이트박스 열기와 충돌한다)가 아니라 라이트박스 헤더로 옮겼다 — 본인 글이거나 관리자일
-  // 때만 보인다.
+  // 수정·삭제 버튼은 카드(<button> 안에 <button> 중첩이 되어 HTML상 유효하지 않고 클릭
+  // 이벤트도 라이트박스 열기와 충돌한다)가 아니라 라이트박스 헤더로 옮겼다 — 본인 글이거나
+  // 관리자일 때만 보인다(수정·삭제 권한 조건은 동일).
+  editEl.hidden = !canDeleteBizPost(post);
+  editEl.onclick = () => startEditBizPost(post);
   deleteEl.hidden = !canDeleteBizPost(post);
   deleteEl.onclick = () => removeBizPost(post.id);
 }
@@ -305,14 +312,36 @@ async function removeBizPost(id) {
 }
 
 let __bizPendingFiles = [];
+let __bizExistingImages = []; // 수정 모드에서만 채워짐(community_posts_images 행 — id 있는 것만, 개별삭제 가능)
+let __bizEditingId = null; // null이면 신규 작성, 아니면 이 id를 수정 중
 
 function renderBizImagePreview() {
   const wrap = document.getElementById('biz-image-preview');
-  wrap.innerHTML = __bizPendingFiles.map((file, i) => `
+  const existingHtml = __bizExistingImages.map(img => `
+    <div class="cpi-image-item">
+      <img src="${img.image_url}" alt="">
+      <button type="button" class="cpi-image-remove" data-remove-existing="${img.id}" aria-label="이 사진 삭제">✕</button>
+    </div>`).join('');
+  const pendingHtml = __bizPendingFiles.map((file, i) => `
     <div class="cpi-image-item">
       <img src="${URL.createObjectURL(file)}" alt="">
       <button type="button" class="cpi-image-remove" data-remove-pending="${i}" aria-label="선택 취소">✕</button>
     </div>`).join('');
+  wrap.innerHTML = existingHtml + pendingHtml;
+  wrap.querySelectorAll('[data-remove-existing]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('이 사진을 삭제할까요? 되돌릴 수 없습니다.')) return;
+      const id = btn.dataset.removeExisting;
+      const img = __bizExistingImages.find(x => String(x.id) === id);
+      try {
+        await deleteCommunityPostImage(id, img ? img.image_path : null, BIZ_BUCKET);
+        __bizExistingImages = __bizExistingImages.filter(x => String(x.id) !== id);
+        renderBizImagePreview();
+      } catch (err) {
+        alert('사진 삭제 중 오류가 발생했습니다: ' + err.message);
+      }
+    });
+  });
   wrap.querySelectorAll('[data-remove-pending]').forEach(btn => {
     btn.addEventListener('click', () => {
       __bizPendingFiles.splice(Number(btn.dataset.removePending), 1);
@@ -329,6 +358,39 @@ document.getElementById('biz-images').addEventListener('change', (e) => {
   __bizPendingFiles = accepted;
   renderBizImagePreview();
 });
+
+function resetBizForm() {
+  __bizEditingId = null;
+  document.getElementById('bizForm').reset();
+  __bizPendingFiles = [];
+  __bizExistingImages = [];
+  renderBizImagePreview();
+  document.getElementById('biz-edit-hint').hidden = true;
+  document.getElementById('biz-submit-btn').textContent = '글 등록';
+  document.getElementById('biz-cancel-edit-btn').hidden = true;
+}
+
+function startEditBizPost(post) {
+  navigateToBizList(); // 폼은 목록뷰에만 있으므로 상세뷰에서 눌렀으면 먼저 목록으로 돌아간다
+  __bizEditingId = post.id;
+  document.getElementById('biz-title').value = post.title || '';
+  document.getElementById('biz-body').value = post.body || '';
+  document.getElementById('biz-map-url').value = post.map_url || '';
+  __bizPendingFiles = [];
+  document.getElementById('biz-images').value = '';
+  // 레거시 단일이미지(image_url만 있고 community_posts_images 행이 없는 과거 글)는 개별
+  // 삭제용 id가 없어 이 프리뷰 목록엔 안 뜬다 — 새 사진을 추가하면 다중테이블 쪽이
+  // 우선 표시되므로(bizImagesOf) 자연스럽게 교체된다.
+  __bizExistingImages = (__bizImagesByPost.get(String(post.id)) || []).slice();
+  renderBizImagePreview();
+  document.getElementById('biz-edit-hint').hidden = false;
+  document.getElementById('biz-submit-btn').textContent = '수정 저장';
+  document.getElementById('biz-cancel-edit-btn').hidden = false;
+  document.getElementById('biz-error').hidden = true;
+  document.getElementById('bizForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('biz-cancel-edit-btn').addEventListener('click', resetBizForm);
 
 document.getElementById('bizForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -352,37 +414,47 @@ document.getElementById('bizForm').addEventListener('submit', async (e) => {
     mapUrl = mapUrlRaw;
   }
 
+  const wasEditing = !!__bizEditingId;
   submitBtn.disabled = true;
   try {
-    const post = await createCommunityPost({
-      board: BIZ_BOARD,
-      author_id: __bizProfile.id,
-      author_name: __bizProfile.name,
-      title, body,
-      map_url: mapUrl,
-    });
-
-    if (__bizPendingFiles.length > 0) {
-      await uploadCommunityPostImages(BIZ_BUCKET, post, __bizPendingFiles, (i, total) => {
-        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${total})`;
+    let post;
+    if (wasEditing) {
+      post = await updateCommunityPost(__bizEditingId, { title, body, map_url: mapUrl });
+    } else {
+      post = await createCommunityPost({
+        board: BIZ_BOARD,
+        author_id: __bizProfile.id,
+        author_name: __bizProfile.name,
+        title, body,
+        map_url: mapUrl,
       });
     }
 
-    document.getElementById('bizForm').reset();
-    __bizPendingFiles = [];
-    renderBizImagePreview();
+    if (__bizPendingFiles.length > 0) {
+      // 수정 모드에서는 deletePostOnFailure:false — 원래부터 있던 글이라 사진 업로드
+      // 실패로 글까지 지우면 안 된다(신규 작성 롤백과 다른 상황).
+      await uploadCommunityPostImages(BIZ_BUCKET, post, __bizPendingFiles, (i, total) => {
+        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${total})`;
+      }, { deletePostOnFailure: !wasEditing });
+    }
+
+    resetBizForm();
     await loadBizPosts();
   } catch (err) {
-    // 사진 업로드 중 실패하면 uploadCommunityPostImages가 이미 글과 업로드분을 정리 시도한다
+    // 사진 업로드 중 실패하면 uploadCommunityPostImages가 (모드에 맞게) 이미 정리를 시도한다
     // (rollbackFailed로 그 정리 자체의 성패를 알려준다) — 사용자에게 정확한 안내를 준다.
-    const rollbackNote = err.rollbackFailed
-      ? ' (일부 데이터 정리에 실패했을 수 있습니다 — 새로고침 후 목록을 확인해주세요)'
-      : ' (작성한 내용은 저장되지 않았습니다)';
-    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message + rollbackNote;
+    const rollbackNote = wasEditing
+      ? ' (글 내용은 저장됐습니다 — 사진 처리만 다시 시도해주세요)'
+      : (err.rollbackFailed
+        ? ' (일부 데이터 정리에 실패했을 수 있습니다 — 새로고침 후 목록을 확인해주세요)'
+        : ' (작성한 내용은 저장되지 않았습니다)');
+    errorEl.textContent = (wasEditing ? '수정' : '등록') + ' 중 오류가 발생했습니다: ' + err.message + rollbackNote;
     errorEl.hidden = false;
   } finally {
+    // __bizEditingId는 성공시 resetBizForm()이 이미 null로 되돌려놨을 수 있어(wasEditing
+    // 스냅샷이 아니라) 현재 값을 다시 읽어야 버튼 문구가 성공/실패 양쪽에서 정확하다.
     submitBtn.disabled = false;
-    submitBtn.textContent = '글 등록';
+    submitBtn.textContent = __bizEditingId ? '수정 저장' : '글 등록';
   }
 });
 

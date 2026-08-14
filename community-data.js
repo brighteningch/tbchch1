@@ -47,6 +47,13 @@ async function deleteCommunityPost(id) {
   if (error) throw error;
 }
 
+async function updateCommunityPost(id, payload) {
+  const sb = requireSupabaseClient();
+  const { data, error } = await sb.from("community_posts").update(payload).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // 게시글 첨부사진(community_posts_images, 1:N) — 읽기는 로그인 회원, 쓰기는 글쓴이 본인만(RLS)
 async function fetchCommunityPostImages(postId) {
   const sb = getSupabaseClient();
@@ -62,6 +69,18 @@ async function addCommunityPostImage(payload) {
   const { data, error } = await sb.from("community_posts_images").insert(payload).select().single();
   if (error) throw error;
   return data;
+}
+
+// 수정 화면에서 기존 사진 1장을 개별 삭제할 때 쓴다 — storage를 먼저 지우고 성공을
+// 확인한 뒤에만 DB 행을 지운다(오늘 밤 검증한 원자성 패턴 재사용, storage-then-db).
+async function deleteCommunityPostImage(id, imagePath, bucket) {
+  const sb = requireSupabaseClient();
+  if (imagePath) {
+    const { error: removeError } = await sb.storage.from(bucket).remove([imagePath]);
+    if (removeError) throw removeError;
+  }
+  const { error } = await sb.from("community_posts_images").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // 목록 화면(카드 여러 개)에서 글마다 따로 조회하면 N+1이 되므로, 게시글 id 목록을 한 번에
@@ -80,7 +99,13 @@ async function fetchCommunityPostImagesByPostIds(postIds) {
 // 남는다. 실패 시 지금까지 올라간 파일과 방금 만든 글을 best-effort로 되돌려(글 삭제 시
 // 자식 community_posts_images 행은 FK cascade로 함께 사라짐) 부분 성공 상태를 남기지 않는다.
 // 4개 글쓰기 페이지(community-write/prayer-request-write/두 지역자료실)가 공유한다.
-async function uploadCommunityPostImages(bucket, post, files, onProgress) {
+//
+// ★수정(edit) 모드 지원(2026-08-14): options.deletePostOnFailure=false로 호출하면 실패해도
+// post 자체는 지우지 않는다 — 신규 작성 롤백(post까지 되돌림)과 기존 글 수정 중 사진 추가
+// 실패(post는 원래부터 있던 글이라 절대 지우면 안 됨)는 완전히 다른 상황이라, 같은 함수를
+// 재사용하되 이 스위치로 구분한다(수정 모드에서 실수로 남의 글까지 지워버리는 사고 방지).
+async function uploadCommunityPostImages(bucket, post, files, onProgress, options) {
+  const deletePostOnFailure = !options || options.deletePostOnFailure !== false;
   const sb = requireSupabaseClient();
   const uploadedPaths = [];
   try {
@@ -104,11 +129,13 @@ async function uploadCommunityPostImages(bucket, post, files, onProgress) {
         console.error('업로드 롤백(storage 정리) 실패:', removeError);
       }
     }
-    try {
-      await deleteCommunityPost(post.id);
-    } catch (deleteErr) {
-      rollbackFailed = true;
-      console.error('업로드 롤백(글 삭제) 실패:', deleteErr);
+    if (deletePostOnFailure) {
+      try {
+        await deleteCommunityPost(post.id);
+      } catch (deleteErr) {
+        rollbackFailed = true;
+        console.error('업로드 롤백(글 삭제) 실패:', deleteErr);
+      }
     }
     // ★reviewer-codex 2차 지적 반영(2026-08-14): 롤백 자체가 실패하면 고아 데이터(Storage
     // 파일 또는 글 행)가 남을 수 있는데, 예전엔 console.error뿐이라 아무도 모르고 넘어갈

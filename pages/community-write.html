@@ -36,10 +36,11 @@
     <div class="cpi-image-grid" id="cImagePreview"></div>
     <div class="sermon-form-actions">
       <button type="submit" class="btn btn-primary" id="cSubmitBtn">등록하기</button>
-      <a href="/pages/community-home.html" class="btn btn-ghost">취소</a>
+      <a href="/pages/community-home.html" class="btn btn-ghost" id="cCancelLink">취소</a>
     </div>
     <p class="auth-error" id="communityFormError" hidden></p>
   </form>
+  <p class="auth-error" id="editGuardError" hidden></p>
 </div>
 
 <div id="footerHost"></div>
@@ -53,14 +54,36 @@ const BOARD = "community-home";
 const COMMUNITY_POST_IMAGE_BUCKET = 'community-post-images';
 let __profile = null;
 let __pendingImageFiles = [];
+let __existingImages = []; // 수정 모드에서만 채워짐 — 이미 저장된 사진(즉시 삭제 가능)
+let __editingId = null; // null이면 신규 작성, 아니면 이 id를 수정 중
 
 function renderCImagePreview() {
   const wrap = document.getElementById('cImagePreview');
-  wrap.innerHTML = __pendingImageFiles.map((file, i) => `
+  const existingHtml = __existingImages.map(img => `
+    <div class="cpi-image-item">
+      <img src="${img.image_url}" alt="">
+      <button type="button" class="cpi-image-remove" data-remove-existing="${img.id}" aria-label="이 사진 삭제">✕</button>
+    </div>`).join('');
+  const pendingHtml = __pendingImageFiles.map((file, i) => `
     <div class="cpi-image-item">
       <img src="${URL.createObjectURL(file)}" alt="">
       <button type="button" class="cpi-image-remove" data-remove-pending="${i}" aria-label="선택 취소">✕</button>
     </div>`).join('');
+  wrap.innerHTML = existingHtml + pendingHtml;
+  wrap.querySelectorAll('[data-remove-existing]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('이 사진을 삭제할까요? 되돌릴 수 없습니다.')) return;
+      const id = btn.dataset.removeExisting;
+      const img = __existingImages.find(x => String(x.id) === id);
+      try {
+        await deleteCommunityPostImage(id, img ? img.image_path : null, COMMUNITY_POST_IMAGE_BUCKET);
+        __existingImages = __existingImages.filter(x => String(x.id) !== id);
+        renderCImagePreview();
+      } catch (err) {
+        alert('사진 삭제 중 오류가 발생했습니다: ' + err.message);
+      }
+    });
+  });
   wrap.querySelectorAll('[data-remove-pending]').forEach(btn => {
     btn.addEventListener('click', () => {
       __pendingImageFiles.splice(Number(btn.dataset.removePending), 1);
@@ -84,6 +107,36 @@ async function initWritePage() {
     document.getElementById('writeGuard').hidden = false;
     return;
   }
+
+  const editParam = new URLSearchParams(location.search).get('edit');
+  if (editParam) {
+    let post;
+    try {
+      post = await fetchCommunityPostById(editParam);
+    } catch (err) {
+      document.getElementById('editGuardError').textContent = '수정할 글을 찾을 수 없습니다: ' + err.message;
+      document.getElementById('editGuardError').hidden = false;
+      return;
+    }
+    if (!post || (post.author_id !== __profile.id && !__profile.is_admin)) {
+      document.getElementById('editGuardError').textContent = '본인 글이거나 관리자만 수정할 수 있습니다.';
+      document.getElementById('editGuardError').hidden = false;
+      return;
+    }
+    __editingId = post.id;
+    document.getElementById('cTitle').value = post.title || '';
+    document.getElementById('cBody').value = post.body || '';
+    document.getElementById('cSubmitBtn').textContent = '수정 저장';
+    document.getElementById('cCancelLink').href = `/pages/community-post.html?id=${encodeURIComponent(post.id)}`;
+    try {
+      __existingImages = await fetchCommunityPostImages(post.id);
+    } catch (err) {
+      console.error('첨부사진 목록을 불러오지 못했습니다:', err);
+      __existingImages = [];
+    }
+    renderCImagePreview();
+  }
+
   document.getElementById('communityForm').hidden = false;
 }
 
@@ -94,31 +147,46 @@ document.getElementById('communityForm').addEventListener('submit', async (e) =>
   const submitBtn = document.getElementById('cSubmitBtn');
   submitBtn.disabled = true;
   try {
-    const post = await createCommunityPost({
-      board: BOARD,
-      author_id: __profile.id,
-      author_name: __profile.name,
-      title: document.getElementById('cTitle').value.trim(),
-      body: document.getElementById('cBody').value.trim(),
-    });
-
-    if (__pendingImageFiles.length > 0) {
-      await uploadCommunityPostImages(COMMUNITY_POST_IMAGE_BUCKET, post, __pendingImageFiles, (i, total) => {
-        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${total})`;
+    let post;
+    if (__editingId) {
+      post = await updateCommunityPost(__editingId, {
+        title: document.getElementById('cTitle').value.trim(),
+        body: document.getElementById('cBody').value.trim(),
+      });
+    } else {
+      post = await createCommunityPost({
+        board: BOARD,
+        author_id: __profile.id,
+        author_name: __profile.name,
+        title: document.getElementById('cTitle').value.trim(),
+        body: document.getElementById('cBody').value.trim(),
       });
     }
 
-    location.href = '/pages/community-home.html';
+    if (__pendingImageFiles.length > 0) {
+      // 수정 모드(__editingId)에서는 deletePostOnFailure:false로 넘긴다 — 원래부터 있던
+      // 글이라 사진 업로드가 실패해도 글까지 지우면 절대 안 된다(신규 작성 롤백과는
+      // 다른 상황). storage에 이미 올라간 실패분만 정리한다.
+      await uploadCommunityPostImages(COMMUNITY_POST_IMAGE_BUCKET, post, __pendingImageFiles, (i, total) => {
+        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${total})`;
+      }, { deletePostOnFailure: !__editingId });
+    }
+
+    location.href = __editingId
+      ? `/pages/community-post.html?id=${encodeURIComponent(post.id)}`
+      : '/pages/community-home.html';
   } catch (err) {
-    // 사진 업로드 중 실패하면 uploadCommunityPostImages가 이미 글과 업로드분을 정리 시도한다
-    // (rollbackFailed로 그 정리 자체의 성패를 알려준다) — 사용자에게 정확한 안내를 준다.
-    const rollbackNote = err.rollbackFailed
-      ? ' (일부 데이터 정리에 실패했을 수 있습니다 — 새로고침 후 목록을 확인해주세요)'
-      : ' (작성한 내용은 저장되지 않았습니다)';
-    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message + rollbackNote;
+    // 사진 업로드 중 실패하면 uploadCommunityPostImages가 (모드에 맞게) 이미 정리를
+    // 시도한다 — rollbackFailed로 그 정리 자체의 성패를 알려준다.
+    const rollbackNote = __editingId
+      ? ' (글 내용은 저장됐습니다 — 사진 처리만 다시 시도해주세요)'
+      : (err.rollbackFailed
+        ? ' (일부 데이터 정리에 실패했을 수 있습니다 — 새로고침 후 목록을 확인해주세요)'
+        : ' (작성한 내용은 저장되지 않았습니다)');
+    errorEl.textContent = (__editingId ? '수정' : '등록') + ' 중 오류가 발생했습니다: ' + err.message + rollbackNote;
     errorEl.hidden = false;
     submitBtn.disabled = false;
-    submitBtn.textContent = '등록하기';
+    submitBtn.textContent = __editingId ? '수정 저장' : '등록하기';
   }
 });
 
