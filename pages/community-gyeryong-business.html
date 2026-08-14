@@ -6,6 +6,20 @@
 <title>계룡시 지역 사업처 · 빛나는교회</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>✦</text></svg>">
 <link rel="stylesheet" href="/style.css">
+<style>
+  /* ★2026-08-14: 카드 클릭 → 페이지 이동(?post=id) 전환 — 기존 nm-lightbox 마크업/CSS를
+     그대로 재사용하되 이 페이지의 #nm-detail-view 스코프 안에서만 모달 전용 규칙(고정
+     오버레이·78vh 높이 캡)을 무효화한다. 공유 style.css는 다른 페이지의 실제 모달에도
+     쓰이므로 건드리지 않는다 — ID 특이성으로 style.css의 max-width:600px 모바일
+     미디어쿼리보다 항상 우선한다. */
+  #nm-detail-view { padding-top: 20px; }
+  #nm-detail-view .nm-lightbox-box { width: 100%; max-height: none; overflow: visible; animation: none; }
+  #nm-detail-view .nm-lightbox-header { align-items: flex-start; flex-wrap: wrap; }
+  #nm-detail-view .nm-lightbox-title { white-space: normal; overflow: visible; text-overflow: clip; font-size: 20px; }
+  #nm-detail-view .nm-lightbox-body { overflow: visible; }
+  #nm-detail-view .nm-lightbox-body img { max-height: none; height: auto; }
+  .nm-detail-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+</style>
 </head>
 <body>
 <div id="headerHost"></div>
@@ -17,7 +31,7 @@
   <div class="bar"></div>
 </section>
 
-<div class="page-body" style="max-width:1100px;">
+<div class="page-body" style="max-width:1100px;" id="nm-list-view">
   <div id="bizGuard" class="admin-guard" hidden>
     <p>로그인 후 글을 쓸 수 있습니다.</p>
     <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
@@ -47,19 +61,18 @@
   <p class="community-empty" id="biz-empty" hidden>아직 등록된 글이 없습니다. 첫 글을 남겨보세요!</p>
 </div>
 
-<div class="nm-lightbox" id="nm-lightbox" hidden>
-  <div class="nm-lightbox-backdrop" id="nm-lightbox-backdrop"></div>
-  <div class="nm-lightbox-box" role="dialog" aria-modal="true" aria-labelledby="nm-lightbox-title">
+<section class="page-body nm-detail-view" style="max-width:1100px;" id="nm-detail-view" hidden>
+  <a href="/pages/community-gyeryong-business.html" class="btn btn-ghost btn-sm nm-detail-back" id="nm-detail-back">← 목록으로</a>
+  <div class="nm-lightbox-box" role="region" aria-labelledby="nm-lightbox-title">
     <div class="nm-lightbox-header">
       <p class="nm-lightbox-title" id="nm-lightbox-title"></p>
       <div class="nm-lightbox-actions">
         <button type="button" class="btn btn-ghost btn-sm" id="nm-lightbox-delete" hidden>삭제</button>
-        <button type="button" class="nm-lightbox-close" id="nm-lightbox-close" aria-label="닫기">✕</button>
       </div>
     </div>
     <div class="nm-lightbox-body" id="nm-lightbox-body"></div>
   </div>
-</div>
+</section>
 
 <div id="footerHost"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -100,15 +113,18 @@ function bizThumbHtml(post) {
   return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">🏪</div>`;
 }
 
+// ★2026-08-14: 카드가 페이지 안 확대(라이트박스)에서 실제 URL 이동(?post=id)으로
+// 바뀌면서, <button>이 아니라 진짜 <a href="?post=id">로 되돌아간다 — 그래야 새 탭 열기
+// (Ctrl/Cmd/휠클릭)·주소 복사·JS 비활성 상태에서도 자연스럽게 동작한다.
 function bizCardHtml(post) {
   return `
-    <button type="button" class="magazine-nm-card" data-post-id="${post.id}">
+    <a href="?post=${encodeURIComponent(post.id)}" class="magazine-nm-card" data-post-id="${post.id}">
       ${bizThumbHtml(post)}
       <div class="magazine-nm-card-body">
         <p class="magazine-post-title">${escBiz(post.title)}</p>
         <p class="magazine-post-date">${escBiz(post.author_name)} · ${(post.created_at || '').slice(0, 10)}</p>
       </div>
-    </button>`;
+    </a>`;
 }
 
 function canDeleteBizPost(post) {
@@ -141,20 +157,67 @@ function openBizLightbox(post) {
   // 때만 보인다.
   deleteEl.hidden = !canDeleteBizPost(post);
   deleteEl.onclick = () => removeBizPost(post.id);
-  document.getElementById('nm-lightbox').hidden = false;
-  document.body.style.overflow = 'hidden';
 }
 
-function closeBizLightbox() {
-  document.getElementById('nm-lightbox').hidden = true;
-  document.body.style.overflow = '';
+// ★2026-08-14: 모달(hidden 토글+body overflow 잠금)에서 페이지 이동(#nm-list-view ↔
+// #nm-detail-view 섹션 전환)으로 바뀌면서, "닫기"라는 개념이 "목록으로 돌아가기"로
+// 대체됐다.
+function teardownBizDetail() {
   document.getElementById('nm-lightbox-body').innerHTML = '';
 }
 
-document.getElementById('nm-lightbox-backdrop').addEventListener('click', closeBizLightbox);
-document.getElementById('nm-lightbox-close').addEventListener('click', closeBizLightbox);
+function showBizListView() {
+  teardownBizDetail();
+  document.getElementById('nm-detail-view').hidden = true;
+  document.getElementById('nm-list-view').hidden = false;
+}
+
+function renderBizPostNotFound() {
+  document.getElementById('nm-lightbox-title').textContent = '글을 찾을 수 없습니다';
+  document.getElementById('nm-lightbox-delete').hidden = true;
+  document.getElementById('nm-lightbox-body').innerHTML =
+    '<div class="nm-lightbox-textbody" style="text-align:center;">요청하신 글을 찾을 수 없습니다. 삭제되었거나 잘못된 링크일 수 있습니다.</div>';
+}
+
+function showBizPostDetail(id) {
+  teardownBizDetail();
+  document.getElementById('nm-list-view').hidden = true;
+  document.getElementById('nm-detail-view').hidden = false;
+  const post = __bizPostsById.get(String(id));
+  if (!post) {
+    renderBizPostNotFound();
+  } else {
+    openBizLightbox(post);
+  }
+  window.scrollTo(0, 0);
+}
+
+function navigateToBizPost(id) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('post', id);
+  history.pushState({ bizPostId: id }, '', url);
+  showBizPostDetail(id);
+}
+
+function navigateToBizList() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('post');
+  history.pushState({}, '', url);
+  showBizListView();
+}
+
+function routeBizFromUrl() {
+  const postId = new URLSearchParams(window.location.search).get('post');
+  if (postId) showBizPostDetail(postId); else showBizListView();
+}
+
+window.addEventListener('popstate', routeBizFromUrl);
+document.getElementById('nm-detail-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  navigateToBizList();
+});
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !document.getElementById('nm-lightbox').hidden) closeBizLightbox();
+  if (e.key === 'Escape' && !document.getElementById('nm-detail-view').hidden) navigateToBizList();
 });
 
 async function loadBizPosts() {
@@ -182,10 +245,11 @@ async function loadBizPosts() {
   }
   emptyEl.hidden = true;
   listEl.innerHTML = __bizPosts.map(bizCardHtml).join('');
-  listEl.querySelectorAll('[data-post-id]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const post = __bizPostsById.get(btn.dataset.postId);
-      if (post) openBizLightbox(post);
+  listEl.querySelectorAll('[data-post-id]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      navigateToBizPost(a.dataset.postId);
     });
   });
 }
@@ -203,13 +267,21 @@ async function removeBizPost(id) {
   try {
     const images = post ? bizImagesOf(post) : [];
     const imagePaths = images.map(img => img.image_path).filter(Boolean);
-    await deleteCommunityPost(id);
+    // ★reviewer-codex 2차 지적 반영(2026-08-14): DB 행을 먼저 지우면, 그 다음 storage
+    // 삭제가 실패해도 image_path를 다시 찾을 방법이 없어 파일이 영구 고아로 남고
+    // 사용자에게도 실패가 안 보인다 — storage 삭제를 먼저 시도해 성공(error 없음)을
+    // 확인한 뒤에만 DB 행을 지운다. storage가 실패하면 DB는 그대로 남아 재시도가 가능하다.
     if (imagePaths.length > 0) {
       const sb = requireSupabaseClient();
-      await sb.storage.from(BIZ_BUCKET).remove(imagePaths);
+      const { error: removeError } = await sb.storage.from(BIZ_BUCKET).remove(imagePaths);
+      if (removeError) {
+        alert('첨부사진 삭제에 실패해 글을 삭제하지 않았습니다: ' + removeError.message + ' — 다시 시도해주세요.');
+        return;
+      }
     }
-    closeBizLightbox();
+    await deleteCommunityPost(id);
     await loadBizPosts();
+    navigateToBizList(); // 삭제된 글이 더 이상 없으므로 상세 화면에 머무르지 않고 목록으로
   } catch (err) {
     alert('삭제 중 오류가 발생했습니다: ' + err.message);
   }
@@ -305,6 +377,7 @@ async function initBizPage() {
     document.getElementById('bizForm').hidden = false;
   }
   await loadBizPosts();
+  routeBizFromUrl();
 }
 
 document.addEventListener('DOMContentLoaded', () => setTimeout(initBizPage, 400));

@@ -9,6 +9,20 @@
 <style>
   .nc-image-previews { display: flex; gap: 8px; flex-wrap: wrap; margin-top: -8px; }
   .nc-image-previews img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; display: block; }
+  /* ★2026-08-14: 카드 클릭 → 페이지 이동(?post=id) 전환 — 기존 nm-lightbox 마크업/CSS를
+     그대로 재사용하되 이 페이지의 #nm-detail-view 스코프 안에서만 모달 전용 규칙(고정
+     오버레이·78vh 높이 캡)을 무효화한다. 공유 style.css는 다른 페이지의 실제 모달에도
+     쓰이므로 건드리지 않는다 — ID 특이성으로 style.css의 max-width:600px 모바일
+     미디어쿼리보다 항상 우선한다. */
+  #nm-detail-view { padding-top: 20px; }
+  #nm-detail-view .nm-lightbox-box { width: 100%; max-height: none; overflow: visible; animation: none; }
+  #nm-detail-view .nm-lightbox-header { align-items: flex-start; flex-wrap: wrap; }
+  #nm-detail-view .nm-lightbox-title { white-space: normal; overflow: visible; text-overflow: clip; font-size: 20px; }
+  #nm-detail-view .nm-lightbox-body { overflow: visible; }
+  #nm-detail-view .nm-lightbox-body img { max-height: none; height: auto; }
+  #nm-detail-view .nm-lightbox-body iframe { height: 82vh; }
+  #nm-detail-view .nm-epub-wrap, #nm-detail-view .nm-epub-viewport { height: 82vh; }
+  .nm-detail-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px; }
 </style>
 </head>
 <body>
@@ -25,7 +39,7 @@
   <p>빛나는교회 청청(청소년&amp;청년부)은 <strong>매주 주일 오전 10:20</strong>에 예배드립니다. 다음세대 청소년·청년들이 신앙 안에서 함께 성장하는 공동체입니다.</p>
 </div>
 
-<div class="page-body" style="max-width:1100px;">
+<div class="page-body" style="max-width:1100px;" id="nm-list-view">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
     <h2 class="section-title" style="margin:0;">게시판</h2>
     <a href="/pages/admin-magazine.html?board=next-youth" class="btn btn-primary btn-sm" id="boardWriteBtn" hidden>글쓰기(관리자·PDF/EPUB)</a>
@@ -70,9 +84,9 @@
   </div>
 </div>
 
-<div class="nm-lightbox" id="nm-lightbox" hidden>
-  <div class="nm-lightbox-backdrop" id="nm-lightbox-backdrop"></div>
-  <div class="nm-lightbox-box" role="dialog" aria-modal="true" aria-labelledby="nm-lightbox-title">
+<section class="page-body nm-detail-view" style="max-width:1100px;" id="nm-detail-view" hidden>
+  <a href="/pages/next-youth.html" class="btn btn-ghost btn-sm nm-detail-back" id="nm-detail-back">← 목록으로</a>
+  <div class="nm-lightbox-box" role="region" aria-labelledby="nm-lightbox-title">
     <div class="nm-lightbox-header">
       <p class="nm-lightbox-title" id="nm-lightbox-title"></p>
       <div class="nm-lightbox-actions">
@@ -80,12 +94,11 @@
         <a class="nm-lightbox-open-link" id="nm-lightbox-open-link" href="#" target="_blank" rel="noopener">새 탭에서 원본 열기 ↗</a>
         <button type="button" class="btn btn-ghost btn-sm" id="nm-lightbox-edit" hidden>수정</button>
         <button type="button" class="btn btn-ghost btn-sm" id="nm-lightbox-delete" hidden>삭제</button>
-        <button type="button" class="nm-lightbox-close" id="nm-lightbox-close" aria-label="닫기">✕</button>
       </div>
     </div>
     <div class="nm-lightbox-body" id="nm-lightbox-body"></div>
   </div>
-</div>
+</section>
 
 <div id="footerHost"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -137,18 +150,21 @@ function nmThumbHtml(post) {
   return `<div class="magazine-nm-card-thumb magazine-nm-card-thumb--pdf">📝</div>`;
 }
 
+// ★2026-08-14: 카드가 페이지 안 확대(라이트박스)에서 실제 URL 이동(?post=id)으로
+// 바뀌면서, <button>이 아니라 진짜 <a href="?post=id">로 되돌아간다 — 그래야 새 탭 열기
+// (Ctrl/Cmd/휠클릭)·주소 복사·JS 비활성 상태에서도 자연스럽게 동작한다.
 function nmCardHtml(post) {
   const badge = post.file_type === 'pdf' ? 'PDF' : post.file_type === 'image' ? '사진' : post.file_type === 'epub' ? 'EPUB' : '글';
   const authorLine = post.author_name ? `${escHtml(post.author_name)} · ` : '';
   return `
-    <button type="button" class="magazine-nm-card" data-post-id="${post.id}">
+    <a href="?post=${encodeURIComponent(post.id)}" class="magazine-nm-card" data-post-id="${post.id}">
       ${nmThumbHtml(post)}
       <div class="magazine-nm-card-body">
         <p class="magazine-post-title">${escHtml(post.title)}</p>
         <p class="magazine-post-date">${authorLine}${(post.created_at || '').slice(0, 10)}</p>
         <span class="magazine-post-badge">${badge}</span>
       </div>
-    </button>`;
+    </a>`;
 }
 
 function canManagePost(post) {
@@ -229,7 +245,7 @@ function openNmLightbox(post) {
   const deleteEl = document.getElementById('nm-lightbox-delete');
   titleEl.textContent = post.title;
   editEl.hidden = !canManagePost(post);
-  editEl.onclick = () => { closeNmLightbox(); startEditNcPost(post); };
+  editEl.onclick = () => { navigateToNmList(); startEditNcPost(post); };
   deleteEl.hidden = !canManagePost(post);
   deleteEl.onclick = () => removeNcPost(post);
   if (!post.file_url) {
@@ -273,14 +289,14 @@ function openNmLightbox(post) {
     downloadEl.href = nmDownloadUrl(post);
     bodyEl.innerHTML = `<iframe src="${post.file_url}" title="${escHtml(post.title)}"></iframe>`;
   }
-  document.getElementById('nm-lightbox').hidden = false;
-  document.body.style.overflow = 'hidden';
 }
 
-function closeNmLightbox() {
+// ★2026-08-14: 모달(hidden 토글+body overflow 잠금)에서 페이지 이동(#nm-list-view ↔
+// #nm-detail-view 섹션 전환)으로 바뀌면서, "닫기"라는 개념이 "목록으로 돌아가기"로
+// 대체됐다 — EPUB Book 인스턴스 정리·iframe/img 언로드는 기존 closeNmLightbox 로직을
+// 그대로 옮겨왔다.
+function teardownNmDetail() {
   __nmEpubGeneration++; // 진행 중인 loadEpubReader가 있다면 결과를 무시하게 한다
-  document.getElementById('nm-lightbox').hidden = true;
-  document.body.style.overflow = '';
   if (__nmEpubBook) {
     try { __nmEpubBook.destroy(); } catch (err) { /* 이미 정리된 상태면 무시 */ }
     __nmEpubBook = null;
@@ -288,10 +304,61 @@ function closeNmLightbox() {
   document.getElementById('nm-lightbox-body').innerHTML = '';
 }
 
-document.getElementById('nm-lightbox-backdrop').addEventListener('click', closeNmLightbox);
-document.getElementById('nm-lightbox-close').addEventListener('click', closeNmLightbox);
+function showNmListView() {
+  teardownNmDetail();
+  document.getElementById('nm-detail-view').hidden = true;
+  document.getElementById('nm-list-view').hidden = false;
+}
+
+function renderNmPostNotFound() {
+  document.getElementById('nm-lightbox-title').textContent = '글을 찾을 수 없습니다';
+  document.getElementById('nm-lightbox-open-link').hidden = true;
+  document.getElementById('nm-lightbox-download-link').hidden = true;
+  document.getElementById('nm-lightbox-edit').hidden = true;
+  document.getElementById('nm-lightbox-delete').hidden = true;
+  document.getElementById('nm-lightbox-body').innerHTML =
+    '<div class="nm-lightbox-textbody" style="text-align:center;">요청하신 글을 찾을 수 없습니다. 삭제되었거나 잘못된 링크일 수 있습니다.</div>';
+}
+
+function showNmPostDetail(id) {
+  teardownNmDetail();
+  document.getElementById('nm-list-view').hidden = true;
+  document.getElementById('nm-detail-view').hidden = false;
+  const post = __nmPostsById.get(String(id));
+  if (!post) {
+    renderNmPostNotFound();
+  } else {
+    openNmLightbox(post);
+  }
+  window.scrollTo(0, 0);
+}
+
+function navigateToNmPost(id) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('post', id);
+  history.pushState({ nmPostId: id }, '', url);
+  showNmPostDetail(id);
+}
+
+function navigateToNmList() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('post');
+  history.pushState({}, '', url);
+  showNmListView();
+}
+
+function routeNmFromUrl() {
+  const postId = new URLSearchParams(window.location.search).get('post');
+  if (postId) showNmPostDetail(postId); else showNmListView();
+}
+
+window.addEventListener('popstate', routeNmFromUrl);
+document.getElementById('nm-detail-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  navigateToNmList();
+});
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !document.getElementById('nm-lightbox').hidden) closeNmLightbox();
+  if (e.key === 'Escape' && !document.getElementById('nm-detail-view').hidden) navigateToNmList();
 });
 
 let __ncProfile = null;
@@ -406,6 +473,7 @@ async function removeNcPost(post) {
       await sb.storage.from('magazine-files').remove([post.thumbnail_path]);
     }
     await loadBoardPage();
+    navigateToNmList(); // 삭제된 글이 더 이상 없으므로 상세 화면에 머무르지 않고 목록으로
   } catch (err) {
     alert('삭제 중 오류가 발생했습니다: ' + err.message);
   }
@@ -507,10 +575,11 @@ async function loadBoardPage() {
         </div>
       </section>`).join('');
 
-    sectionsEl.querySelectorAll('[data-post-id]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const post = __nmPostsById.get(btn.dataset.postId);
-        if (post) openNmLightbox(post);
+    sectionsEl.querySelectorAll('[data-post-id]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        navigateToNmPost(a.dataset.postId);
       });
     });
 
@@ -562,6 +631,7 @@ async function loadBoardPage() {
     }
   } catch (err) { /* 로그인 안 한 방문자는 무시 */ }
   await loadBoardPage();
+  routeNmFromUrl();
 })();
 </script>
 
