@@ -120,10 +120,19 @@ const idParam = params.get('id') || '';
           const sb = requireSupabaseClient();
           const imagePaths = images.map(img => img.image_path).filter(Boolean);
           if (post.image_path) imagePaths.push(post.image_path);
-          await deleteCommunityPost(post.id);
+          // ★reviewer-codex 2차 지적 반영(2026-08-14): DB 행을 먼저 지우면, 그 다음
+          // storage 삭제가 실패해도 image_path를 다시 찾을 방법이 없어 파일이 영구
+          // 고아로 남고 사용자에게도 실패가 안 보인다 — storage 삭제를 먼저 시도해
+          // 성공(error 없음)을 확인한 뒤에만 DB 행을 지운다. storage가 실패하면 DB는
+          // 그대로 남아 image_path를 잃지 않으므로 재시도가 가능하다.
           if (imagePaths.length > 0) {
-            await sb.storage.from('community-post-images').remove(imagePaths);
+            const { error: removeError } = await sb.storage.from('community-post-images').remove(imagePaths);
+            if (removeError) {
+              alert('첨부사진 삭제에 실패해 글을 삭제하지 않았습니다: ' + removeError.message + ' — 다시 시도해주세요.');
+              return;
+            }
           }
+          await deleteCommunityPost(post.id);
           location.href = '/pages/prayer-request.html';
         } catch (err) {
           alert('삭제 중 오류가 발생했습니다: ' + err.message);

@@ -110,6 +110,14 @@ async function uploadCommunityPostImages(bucket, post, files, onProgress) {
       rollbackFailed = true;
       console.error('업로드 롤백(글 삭제) 실패:', deleteErr);
     }
+    // ★reviewer-codex 2차 지적 반영(2026-08-14): 롤백 자체가 실패하면 고아 데이터(Storage
+    // 파일 또는 글 행)가 남을 수 있는데, 예전엔 console.error뿐이라 아무도 모르고 넘어갈
+    // 위험이 있었다 — 호출부(각 글쓰기 페이지)의 에러 문구가 이 사실을 반드시 담게 하려고
+    // err.rollbackFailed 플래그로만 맡기면 "호출부가 깜빡할 위험"이 남으므로, 이 함수
+    // 자신이 직접 alert로도 확실히 알린다(호출부 구현에 기대지 않는 이중 보장).
+    if (rollbackFailed) {
+      alert('사진 정리 중 일부가 실패해 서버에 데이터가 남아있을 수 있습니다. 화면의 안내에 따라 다시 시도해주시고, 계속되면 관리자에게 알려주세요.');
+    }
     err.rollbackFailed = rollbackFailed;
     throw err;
   }
