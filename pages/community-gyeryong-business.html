@@ -76,6 +76,7 @@ let __bizProfile = null;
 let __bizPosts = [];
 let __bizPostsById = new Map();
 let __bizImagesByPost = new Map(); // post_id(string) -> community_posts_images 배열(sort_order순)
+let __bizImagesLoadFailed = false; // 벌크조회 실패 시 true — 이 상태에서는 삭제를 막는다(고아파일 방지)
 
 // 신규 글은 community_posts_images(1:N)만 쓰고, 과거 글은 image_url 단일 컬럼으로 계속
 // 표시한다(마이그레이션 없음) — 그래서 항상 "이 글의 이미지 목록"을 다중테이블 우선,
@@ -162,6 +163,7 @@ async function loadBizPosts() {
   __bizPosts = await fetchCommunityPosts(BIZ_BOARD);
   __bizPostsById = new Map(__bizPosts.map(p => [String(p.id), p]));
   __bizImagesByPost = new Map();
+  __bizImagesLoadFailed = false;
   try {
     const allImages = await fetchCommunityPostImagesByPostIds(__bizPosts.map(p => p.id));
     allImages.forEach(img => {
@@ -171,6 +173,7 @@ async function loadBizPosts() {
     });
   } catch (imgErr) {
     console.error('첨부사진 목록을 불러오지 못했습니다:', imgErr);
+    __bizImagesLoadFailed = true;
   }
   if (__bizPosts.length === 0) {
     listEl.innerHTML = '';
@@ -188,6 +191,13 @@ async function loadBizPosts() {
 }
 
 async function removeBizPost(id) {
+  // ★reviewer-codex 지적 반영(2026-08-14): 첨부사진 벌크조회가 실패한 채로 삭제를 진행하면
+  // 그 글에 실제로 사진이 있어도 __bizImagesByPost가 비어있어 Storage 정리 대상을 못 찾고
+  // 글만 지워버려 사진이 영구 고아로 남는다 — 조회 실패 시에는 삭제 자체를 막는다.
+  if (__bizImagesLoadFailed) {
+    alert('첨부사진 목록을 불러오지 못해 안전하게 삭제할 수 없습니다. 새로고침 후 다시 시도해주세요.');
+    return;
+  }
   const post = __bizPostsById.get(String(id));
   if (!confirm(`"${post ? post.title : ''}" 글을 삭제할까요? 되돌릴 수 없습니다.`)) return;
   try {
@@ -264,17 +274,9 @@ document.getElementById('bizForm').addEventListener('submit', async (e) => {
     });
 
     if (__bizPendingFiles.length > 0) {
-      const sb = requireSupabaseClient();
-      for (let i = 0; i < __bizPendingFiles.length; i++) {
-        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${__bizPendingFiles.length})`;
-        const pfile = __bizPendingFiles[i];
-        const ext = (pfile.name.split('.').pop() || 'jpg').toLowerCase();
-        const path = `${post.id}/${Date.now()}-${i}.${ext}`;
-        const { error: uploadError } = await sb.storage.from(BIZ_BUCKET).upload(path, pfile, { upsert: false });
-        if (uploadError) throw uploadError;
-        const { data: pub } = sb.storage.from(BIZ_BUCKET).getPublicUrl(path);
-        await addCommunityPostImage({ post_id: post.id, image_url: pub.publicUrl, image_path: path, sort_order: i });
-      }
+      await uploadCommunityPostImages(BIZ_BUCKET, post, __bizPendingFiles, (i, total) => {
+        submitBtn.textContent = `사진 업로드 중… (${i + 1}/${total})`;
+      });
     }
 
     document.getElementById('bizForm').reset();
@@ -282,7 +284,12 @@ document.getElementById('bizForm').addEventListener('submit', async (e) => {
     renderBizImagePreview();
     await loadBizPosts();
   } catch (err) {
-    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message;
+    // 사진 업로드 중 실패하면 uploadCommunityPostImages가 이미 글과 업로드분을 정리 시도한다
+    // (rollbackFailed로 그 정리 자체의 성패를 알려준다) — 사용자에게 정확한 안내를 준다.
+    const rollbackNote = err.rollbackFailed
+      ? ' (일부 데이터 정리에 실패했을 수 있습니다 — 새로고침 후 목록을 확인해주세요)'
+      : ' (작성한 내용은 저장되지 않았습니다)';
+    errorEl.textContent = '등록 중 오류가 발생했습니다: ' + err.message + rollbackNote;
     errorEl.hidden = false;
   } finally {
     submitBtn.disabled = false;

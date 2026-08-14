@@ -74,3 +74,43 @@ async function fetchCommunityPostImagesByPostIds(postIds) {
   if (error) throw error;
   return data || [];
 }
+
+// ★reviewer-codex 지적 반영(2026-08-14): 글을 먼저 만들고 사진을 순차 업로드하는 흐름에서
+// 일부 파일만 업로드 중 실패하면 이미 만든 글과 이미 올라간 Storage 파일이 반쪽짜리 상태로
+// 남는다. 실패 시 지금까지 올라간 파일과 방금 만든 글을 best-effort로 되돌려(글 삭제 시
+// 자식 community_posts_images 행은 FK cascade로 함께 사라짐) 부분 성공 상태를 남기지 않는다.
+// 4개 글쓰기 페이지(community-write/prayer-request-write/두 지역자료실)가 공유한다.
+async function uploadCommunityPostImages(bucket, post, files, onProgress) {
+  const sb = requireSupabaseClient();
+  const uploadedPaths = [];
+  try {
+    for (let i = 0; i < files.length; i++) {
+      if (onProgress) onProgress(i, files.length);
+      const file = files[i];
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${post.id}/${Date.now()}-${i}.${ext}`;
+      const { error: uploadError } = await sb.storage.from(bucket).upload(path, file, { upsert: false });
+      if (uploadError) throw uploadError;
+      uploadedPaths.push(path);
+      const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
+      await addCommunityPostImage({ post_id: post.id, image_url: pub.publicUrl, image_path: path, sort_order: i });
+    }
+  } catch (err) {
+    let rollbackFailed = false;
+    if (uploadedPaths.length > 0) {
+      const { error: removeError } = await sb.storage.from(bucket).remove(uploadedPaths);
+      if (removeError) {
+        rollbackFailed = true;
+        console.error('업로드 롤백(storage 정리) 실패:', removeError);
+      }
+    }
+    try {
+      await deleteCommunityPost(post.id);
+    } catch (deleteErr) {
+      rollbackFailed = true;
+      console.error('업로드 롤백(글 삭제) 실패:', deleteErr);
+    }
+    err.rollbackFailed = rollbackFailed;
+    throw err;
+  }
+}
