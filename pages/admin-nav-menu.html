@@ -125,7 +125,13 @@ async function uploadGroupHeroImage(gi, file) {
     const { error: uploadError } = await sb.storage.from(NAV_HERO_BUCKET).upload(path, file, { upsert: true });
     if (uploadError) throw uploadError;
     const { data: pub } = sb.storage.from(NAV_HERO_BUCKET).getPublicUrl(path);
-    group.heroImage = pub.publicUrl;
+    // ★2026-08-14 직접 발견·수정(오너 실사용 중 재현): upsert:true라 교체 업로드해도 파일
+    // 경로(따라서 공개 URL)가 완전히 똑같다 — 브라우저·CDN이 이 URL을 이미 캐싱해둔 상태라
+    // 새 이미지를 올려도 계속 옛 이미지가 보였다(교체가 "안 되는 것처럼" 보이는 버그였다).
+    // 저장은 경로 그대로 유지(고아 파일 방지)하되, 화면에 쓰는 URL에만 매 업로드마다 바뀌는
+    // 캐시무효화 쿼리스트링을 붙인다 — isSafeImageUrl은 startsWith 검사라 쿼리스트링이
+    // 붙어도 통과하고, applyPageHeroImage의 CSS url()에도 그대로 쓸 수 있다.
+    group.heroImage = pub.publicUrl + '?v=' + Date.now();
     renderNavMenuForm();
   } catch (err) {
     statusEl.textContent = '업로드 실패: ' + err.message;
@@ -138,8 +144,11 @@ async function removeGroupHeroImage(gi) {
   if (!confirm('이 그룹의 대표이미지를 제거할까요?')) return;
   try {
     const sb = requireSupabaseClient();
-    // 파일 경로는 URL 마지막 세그먼트(예: {groupId}.jpg)로 역산한다.
-    const path = decodeURIComponent(group.heroImage.split('/').pop());
+    // 파일 경로는 URL 마지막 세그먼트(예: {groupId}.jpg)로 역산한다. 캐시무효화를 위해
+    // heroImage에 붙여둔 ?v=... 쿼리스트링은 실제 파일 경로가 아니므로 먼저 떼어낸다
+    // (안 떼면 존재하지 않는 경로를 지우려다 조용히 실패해 파일이 고아로 남는다).
+    const urlWithoutQuery = group.heroImage.split('?')[0];
+    const path = decodeURIComponent(urlWithoutQuery.split('/').pop());
     await sb.storage.from(NAV_HERO_BUCKET).remove([path]);
   } catch (err) {
     console.error('대표이미지 파일 삭제 실패(설정에서는 제거됨):', err);
