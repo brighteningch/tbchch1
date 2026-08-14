@@ -132,7 +132,19 @@ const idParam = params.get('id') || '';
               return;
             }
           }
-          await deleteCommunityPost(post.id);
+          // ★reviewer-codex 3차 지적 반영(2026-08-14): storage 삭제 성공 후 이 DB 삭제가
+          // 실패하면(네트워크·세션만료 등) 사진은 이미 없는데 글은 남아 이미지가 깨진
+          // 채로 보인다 — 클라이언트만으로 두 시스템 간 완전한 원자성은 보장할 수 없어
+          // "다시 시도" 안내로 수렴시킨다. storage.remove()는 이미 지워진 경로를 다시
+          // 불러도 error 없이 넘어가는 멱등 동작임을 실측 확인했으므로(test_idempotent_
+          // remove.js), 재시도하면 이 DB 삭제만 다시 성공하면 정상 종결된다 — 글 행이
+          // DB에 그대로 남아있어 재시도 경로 자체는 안전하다.
+          try {
+            await deleteCommunityPost(post.id);
+          } catch (dbErr) {
+            alert('사진 정리는 됐지만 글 삭제가 실패했습니다: ' + dbErr.message + ' — 다시 시도해주세요.');
+            return;
+          }
           location.href = '/pages/prayer-request.html';
         } catch (err) {
           alert('삭제 중 오류가 발생했습니다: ' + err.message);
