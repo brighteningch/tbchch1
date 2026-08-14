@@ -3,10 +3,25 @@
 // 주의: 동명이인이 있으면 두 번째 가입자는 "이미 사용중인 이름"으로 막힌다 (작은 공동체 전제 하의 단순화).
 const MEMBER_EMAIL_DOMAIN = "members.tbchch1.com";
 
+// ★2026-08-14 직접 발견·수정(worker의 community_posts 수정기능 검증 중 CDP Network
+// 이벤트로 실측 확인): Supabase REST 응답에는 Cache-Control/ETag/Last-Modified가 전혀
+// 없는데, 이 상태에서 브라우저가 GET 요청에 자체 휴리스틱 캐싱을 적용해 같은 URL을
+// 디스크 캐시에서 서빙하는 경우가 있다(servedFromCache: true 관찰됨). 한 사용자가 글을
+// 본 뒤 다른 사용자(관리자 등)가 같은 글을 고쳐도, 앞서 캐싱된 오래된 응답이 그대로
+// 다시 노출될 수 있다 — 예: 삭제 직전 "지금 첨부된 사진 목록"을 다시 조회하는 안전장치가
+// 캐시된 옛 목록을 받아 방금 추가된 사진을 놓쳐 고아 파일을 남기는 시나리오가 실제로
+// 재현됐다. 모든 페이지가 이 함수 하나로 클라이언트를 공유하므로, 여기서 커스텀 fetch로
+// no-store를 강제하면 사이트 전체의 잠재적 stale-read를 한 번에 차단할 수 있다.
+function noStoreFetch(input, init) {
+  return fetch(input, { ...init, cache: 'no-store' });
+}
+
 function getSupabaseClient() {
   if (!window.supabase || !window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) return null;
   if (!window.__sbClient) {
-    window.__sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    window.__sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {
+      global: { fetch: noStoreFetch },
+    });
   }
   return window.__sbClient;
 }
