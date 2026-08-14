@@ -201,7 +201,12 @@ async function generateAndUploadThumbnail(sourceBlobOrArrayBuffer, pageNumber, b
   const { error: upErr } = await sb.storage.from(MAGAZINE_BUCKET).upload(thumbPath, blob, { upsert: true, contentType: 'image/jpeg' });
   if (upErr) throw upErr;
   const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(thumbPath);
-  return { thumbnail_url: pub.publicUrl, thumbnail_path: thumbPath };
+  // ★2026-08-14 직접 발견·수정(admin-nav-menu.html의 대표이미지 교체 버그와 동일 패턴):
+  // thumbPath가 결정론적(고정)이라 썸네일을 다시 생성해도 URL이 완전히 똑같다 — 다른
+  // 페이지 번호로 재생성해도 브라우저/CDN 캐시 때문에 옛 썸네일이 계속 보일 수 있다.
+  // thumbnail_path(고아 파일 정리용 실제 경로)는 그대로 두고, DB에 저장하는
+  // thumbnail_url에만 캐시무효화 쿼리스트링을 붙인다.
+  return { thumbnail_url: pub.publicUrl + '?v=' + Date.now(), thumbnail_path: thumbPath };
 }
 
 // ★2026-08-13(스코핑 정정): 오너가 원래 신고한 "미리보기가 안 된다"는 라이트박스 안
@@ -290,7 +295,10 @@ async function generateAndUploadEpubCoverThumbnail(fileOrArrayBuffer, basePath) 
   const { error: upErr } = await sb.storage.from(MAGAZINE_BUCKET).upload(thumbPath, coverBlob, { upsert: true, contentType: 'image/jpeg' });
   if (upErr) throw upErr;
   const { data: pub } = sb.storage.from(MAGAZINE_BUCKET).getPublicUrl(thumbPath);
-  return { thumbnail_url: pub.publicUrl, thumbnail_path: thumbPath };
+  // ★2026-08-14 직접 발견·수정(위 PDF 썸네일 함수와 동일 사유): thumbPath가 결정론적이라
+  // 표지를 다시 추출해도(파일 재업로드 등) URL이 그대로라 캐시된 옛 표지가 계속 보일 수
+  // 있다 — thumbnail_url에만 캐시무효화 쿼리스트링을 붙인다.
+  return { thumbnail_url: pub.publicUrl + '?v=' + Date.now(), thumbnail_path: thumbPath };
 }
 
 let __mgPosts = [];
