@@ -1,0 +1,25 @@
+name: Supabase 휴면 방지(keep-alive)
+
+# Supabase 무료 플랜은 7일간 API 호출이 없으면 프로젝트가 자동 일시정지된다. 이틀에
+# 한 번, 공개 읽기 정책이 걸린 가벼운 테이블(app_settings)을 살짝 조회만 해서 프로젝트를
+# 계속 활동 상태로 유지한다 — 비용은 전혀 들지 않는다(GitHub Actions 무료 실행시간 내,
+# Supabase 쪽도 단순 SELECT 1건이라 무료 사용량 한도에 영향 없음).
+on:
+  schedule:
+    - cron: '0 20 */2 * *' # 매 2일마다 20:00 UTC(오전 5시 KST)
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Supabase에 가벼운 조회 요청 보내기
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://vogslryxeicemtotleph.supabase.co/rest/v1/app_settings?select=key&limit=1" \
+            -H "apikey: sb_publishable_XFxawpPt098rCpSPPE4U_A_-GJbrBuF")
+          echo "Supabase 응답 상태 코드: $status"
+          if [ "$status" -ge 500 ]; then
+            echo "Supabase가 응답하지 않습니다(상태 코드 $status) — 휴면 상태일 수 있습니다."
+            exit 1
+          fi
