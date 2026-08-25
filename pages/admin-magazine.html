@@ -127,6 +127,14 @@ window.renderPdfPageThumbnail = async function (fileOrArrayBuffer, pageNumber) {
 function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 const MAGAZINE_BUCKET = 'magazine-files';
 const MAGAZINE_ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'epub'];
+// ★2026-08-25: 매거진 다중이미지 첨부 — next-children.html의 nc-images/uploadNcImages가
+// 이미 쓰는 magazine_post_images 테이블·버킷을 그대로 재사용한다(신규 버킷/신규 CRUD
+// 함수 없음). MAGAZINE_MAX_IMAGES=6은 그 페이지가 이미 쓰는 NC_MAX_IMAGES 관례를 그대로
+// 따른 값 — 이 티켓 지시에는 구체적 상한이 없었으나, 같은 공유 버킷/테이블에 무제한
+// 업로드를 허용하지 않기 위해 기존 컨벤션을 그대로 재사용했다(임의 신규 도입 아님).
+const MAGAZINE_IMAGES_BUCKET = 'magazine-post-images';
+const MAGAZINE_MAX_IMAGES = 6;
+const MAGAZINE_ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
 const MAGAZINE_INTERVAL_SETTING_KEY = 'magazine_featured_interval_seconds';
 const MAGAZINE_INTERVAL_DEFAULT_SECONDS = 8;
 
@@ -178,11 +186,18 @@ document.getElementById('mg-back-link').textContent = boardLabel.backLabel;
 document.getElementById('mg-category').placeholder = boardLabel.categoryPlaceholder;
 document.getElementById('mg-file').required = BOARD_REQUIRES_FILE;
 document.getElementById('mg-file-label').firstChild.textContent = BOARD_REQUIRES_FILE
-  ? '파일 (PDF, JPG, EPUB 중 1개)'
+  ? '파일 (PDF, JPG, EPUB 중 1개, 또는 이미지 여러 장)'
   : '파일 (선택 — PDF, JPG, EPUB 중 1개, 첨부 안 해도 글쓰기 가능)';
-document.getElementById('mg-file-hint').textContent = BOARD_REQUIRES_FILE
-  ? 'PDF, JPG, EPUB 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다). EPUB은 홈페이지에서 책장 넘기듯 바로 읽을 수 있는 뷰어로 보여집니다.'
-  : 'PDF, JPG, EPUB 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다). 파일 없이 제목과 본문만으로도 글을 올릴 수 있습니다.';
+// ★2026-08-25: '빛나는 매거진'(board=magazine) 글쓰기만 여러 장의 이미지를 첨부할 수 있게
+// 확장한다(오너 위임 범위 — 교회학교/청청 게시판은 이 화면을 그대로 공유하지만 이번
+// 변경 대상이 아니므로, multiple 속성·다중이미지 검증·저장 분기 전부 BOARD==='magazine'
+// 조건으로 게이트해 다른 두 게시판 동작을 완전히 그대로 둔다).
+document.getElementById('mg-file').multiple = (BOARD === 'magazine');
+document.getElementById('mg-file-hint').textContent = BOARD === 'magazine'
+  ? `PDF, JPG, EPUB 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다). EPUB은 홈페이지에서 책장 넘기듯 바로 읽을 수 있는 뷰어로 보여집니다. 이미지(JPG/PNG)는 여러 장(최대 ${MAGAZINE_MAX_IMAGES}장)을 한 번에 선택할 수 있습니다 — 여러 장을 고르면 자동으로 사진 게시물로 등록됩니다.`
+  : BOARD_REQUIRES_FILE
+    ? 'PDF, JPG, EPUB 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다). EPUB은 홈페이지에서 책장 넘기듯 바로 읽을 수 있는 뷰어로 보여집니다.'
+    : 'PDF, JPG, EPUB 파일만 올릴 수 있습니다(다른 형식은 업로드 단계에서 거부됩니다). 파일 없이 제목과 본문만으로도 글을 올릴 수 있습니다.';
 // 자동전환 간격 설정은 홈페이지 '교회뉴스' featured 슬라이드쇼 전용 기능이라 매거진
 // 게시판에만 의미가 있다 — 다른 두 게시판 관리 화면에서는 패널 자체를 숨긴다.
 if (BOARD !== 'magazine') {
@@ -299,6 +314,37 @@ async function generateAndUploadEpubCoverThumbnail(fileOrArrayBuffer, basePath) 
   // 표지를 다시 추출해도(파일 재업로드 등) URL이 그대로라 캐시된 옛 표지가 계속 보일 수
   // 있다 — thumbnail_url에만 캐시무효화 쿼리스트링을 붙인다.
   return { thumbnail_url: pub.publicUrl + '?v=' + Date.now(), thumbnail_path: thumbPath };
+}
+
+// ★2026-08-25: 매거진 다중이미지 첨부 — next-children.html의 uploadNcImages(430~455줄)를
+// 그대로 옮겨왔다(원자적 업로드 + 실패 시 이미 올린 파일 롤백). 유일한 차이는 sort_order를
+// 1부터 시작한다는 점 — 매거진은 magazine_posts_magazine_requires_file DB 제약(board='magazine'
+// 이면 file_url not null) 때문에 next-children처럼 "파일 없이 이미지만"으로 글을 만들 수
+// 없어, 선택된 파일 중 첫 번째는 기존 단일파일 업로드 경로(file_url/file_path/file_type)를
+// 그대로 태우고, 이 함수는 2번째 파일부터(extraImageFiles)만 받아 magazine_post_images에
+// sort_order 1,2,3...으로 이어붙인다(0은 file_url 자리로 암묵 예약).
+async function uploadMagazineExtraImages(files, postId) {
+  const sb = requireSupabaseClient();
+  const uploadedPaths = [];
+  try {
+    const rows = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ext = (file.name.split('.').pop() || (file.type === 'image/png' ? 'png' : 'jpg')).toLowerCase();
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${i}.${ext}`;
+      const { error: uploadError } = await sb.storage.from(MAGAZINE_IMAGES_BUCKET).upload(path, file, { upsert: false });
+      if (uploadError) throw uploadError;
+      uploadedPaths.push(path);
+      const { data: pub } = sb.storage.from(MAGAZINE_IMAGES_BUCKET).getPublicUrl(path);
+      rows.push({ post_id: postId, image_url: pub.publicUrl, image_path: path, sort_order: i + 1 });
+    }
+    await insertMagazinePostImages(rows);
+  } catch (err) {
+    if (uploadedPaths.length > 0) {
+      try { await sb.storage.from(MAGAZINE_IMAGES_BUCKET).remove(uploadedPaths); } catch (cleanupErr) { console.error('업로드 실패 후 정리 실패:', cleanupErr); }
+    }
+    throw err;
+  }
 }
 
 let __mgPosts = [];
@@ -473,7 +519,7 @@ document.getElementById('mg-filter-category').addEventListener('change', (e) => 
 // 썸네일 생성은 매번 조용히 실패 → 관리자가 매번 "썸네일 재생성" 버튼을 눌러야
 // 했던 원인). 이미 올바른 스코프로 살아있는 filePath로 바꿔 고쳤다(과제 범위인
 // 수정 기능과 무관한 별도 발견 — master에게 별도 보고).
-async function createNewPost({ category, title, body, file, fileType }) {
+async function createNewPost({ category, title, body, file, fileType, extraImageFiles }) {
   const thumbPage = Math.max(1, parseInt(document.getElementById('mg-thumb-page').value, 10) || 1);
   let fileUrl = null, filePath = null;
 
@@ -524,6 +570,20 @@ async function createNewPost({ category, title, body, file, fileType }) {
       alert('글은 등록되었지만 표지 추출에 실패했습니다(책 아이콘으로 표시됩니다): ' + thumbErr.message);
     }
   }
+
+  // ★2026-08-25: 이미지 2장 이상 선택 시(매거진 게시판 한정) — 첫 장은 위에서 이미 기존
+  // 단일파일 경로로 정상 등록됐다. 나머지는 magazine_post_images에 추가로 붙인다. 이
+  // 단계만 실패해도 글 자체(+대표 이미지 1장)는 이미 정상 등록된 상태이므로, 위 썸네일
+  // 생성 실패와 동일하게 글 등록을 되돌리지 않고 별도로 알린다(그래야 관리자가 "등록
+  // 자체가 실패했다"고 오해해 중복 등록을 시도하지 않는다).
+  if (extraImageFiles && extraImageFiles.length > 0) {
+    try {
+      await uploadMagazineExtraImages(extraImageFiles, created.id);
+    } catch (imgErr) {
+      console.error('추가 이미지 업로드 실패(글과 대표 이미지 1장은 정상 등록됨):', imgErr);
+      alert('글과 첫 번째 사진은 등록되었지만, 나머지 사진 업로드에 실패했습니다: ' + imgErr.message + '\n목록에서 "수정"으로 다시 사진을 첨부해주세요.');
+    }
+  }
 }
 
 // 수정 저장. 텍스트 필드(카테고리/제목/본문)는 항상 갱신한다. 파일을 새로 고르지
@@ -532,7 +592,7 @@ async function createNewPost({ category, title, body, file, fileType }) {
 // createNewPost와 동일한 업로드+썸네일 파이프라인을 태우고, 성공적으로 새 파일이
 // 반영된 뒤 옛 원본 파일과 옛 썸네일을 Storage에서 정리해 고아 파일을 남기지
 // 않는다(이 프로젝트가 과거 겪은 고아 파일 버그 재발 방지 — removePost와 동일 원칙).
-async function saveEditedPost(id, { category, title, body, file, fileType }) {
+async function saveEditedPost(id, { category, title, body, file, fileType, extraImageFiles }) {
   const post = __mgPosts.find(p => p.id === id);
   const payload = { category, title, body: body || null };
 
@@ -587,6 +647,31 @@ async function saveEditedPost(id, { category, title, body, file, fileType }) {
       console.error('옛 파일 정리 실패(수정은 정상 반영됨):', cleanupErr);
     }
   }
+
+  // ★2026-08-25: 매거진(board='magazine') 한정 — 새 파일을 다시 선택했을 때만(1장이든
+  // 여러장이든) 기존 magazine_post_images를 전부 새 세트로 교체한다(부분 추가/삭제 없음,
+  // 티켓 지시대로 전체교체로 단순화). BOARD가 magazine이 아니면 이 블록 전체를 건너뛴다 —
+  // next-children/next-youth 글을 이 관리자 화면에서 수정할 때 회원이 그 페이지에서 직접
+  // 붙인 magazine_post_images를 실수로 지우는 사고를 원천 차단한다(무접촉 대상 보호).
+  // 순서는 storage-then-db-delete-order 메모리와 달리 "신규 먼저 업로드 → 구 DB행 삭제 →
+  // 구 Storage 삭제"인데, 이건 next-children.html의 기존 수정(REPLACE) 패턴을 그대로 따른
+  // 것이다(단순 삭제와 달리 교체는 새 자료가 안전하게 자리잡은 뒤에 옛 자료를 지워야 중간
+  // 실패 시 사진이 0장인 상태로 남지 않는다).
+  if (BOARD === 'magazine' && file) {
+    const oldExtraImages = (post && post.magazine_post_images) || [];
+    if (extraImageFiles && extraImageFiles.length > 0) {
+      await uploadMagazineExtraImages(extraImageFiles, id);
+    }
+    const oldIds = oldExtraImages.map(img => img.id).filter(Boolean);
+    if (oldIds.length > 0) {
+      await deleteMagazinePostImagesByIds(oldIds);
+    }
+    const oldPaths = oldExtraImages.map(img => img.image_path).filter(Boolean);
+    if (oldPaths.length > 0) {
+      const sb = requireSupabaseClient();
+      await sb.storage.from(MAGAZINE_IMAGES_BUCKET).remove(oldPaths);
+    }
+  }
 }
 
 document.getElementById('form-magazine').addEventListener('submit', async (e) => {
@@ -596,7 +681,13 @@ document.getElementById('form-magazine').addEventListener('submit', async (e) =>
   const category = document.getElementById('mg-category').value.trim();
   const title = document.getElementById('mg-title').value.trim();
   const body = document.getElementById('mg-body').value.trim();
-  const file = document.getElementById('mg-file').files[0];
+  // ★2026-08-25: mg-file이 매거진 게시판에서 multiple이 되면서 files[0]만 보던 기존
+  // 코드로는 2번째 파일부터 무시된다 — 전체 FileList를 배열로 받는다. 첫 번째 파일은
+  // 아래에서 여전히 `file`(단수)로 다뤄 기존 단일업로드 로직을 100% 재사용하고,
+  // 매거진 게시판에서 2장 이상 골랐을 때만 나머지를 extraImageFiles로 분리한다.
+  const filesRaw = Array.from(document.getElementById('mg-file').files || []);
+  const file = filesRaw[0] || null;
+  const extraImageFiles = BOARD === 'magazine' ? filesRaw.slice(1) : [];
   const submitBtn = document.getElementById('mg-submit-btn');
   if (!category || !title) return;
   if (!__mgEditingId && BOARD_REQUIRES_FILE && !file) {
@@ -612,14 +703,33 @@ document.getElementById('form-magazine').addEventListener('submit', async (e) =>
     return;
   }
 
+  if (extraImageFiles.length > 0) {
+    if (filesRaw.length > MAGAZINE_MAX_IMAGES) {
+      errorEl.textContent = `사진은 최대 ${MAGAZINE_MAX_IMAGES}장까지 첨부할 수 있습니다.`;
+      errorEl.hidden = false;
+      return;
+    }
+    if (fileType !== 'image') {
+      errorEl.textContent = '여러 장을 첨부하려면 전부 이미지(JPG/PNG) 파일이어야 합니다. PDF·EPUB은 1개만 첨부할 수 있습니다.';
+      errorEl.hidden = false;
+      return;
+    }
+    const invalidExtra = extraImageFiles.find(f => !MAGAZINE_ALLOWED_IMAGE_TYPES.includes(f.type));
+    if (invalidExtra) {
+      errorEl.textContent = '이미지는 JPG, PNG 파일만 첨부할 수 있습니다.';
+      errorEl.hidden = false;
+      return;
+    }
+  }
+
   const wasEditing = !!__mgEditingId;
   submitBtn.disabled = true;
   submitBtn.textContent = wasEditing ? '저장 중…' : '업로드 중…';
   try {
     if (wasEditing) {
-      await saveEditedPost(__mgEditingId, { category, title, body, file, fileType });
+      await saveEditedPost(__mgEditingId, { category, title, body, file, fileType, extraImageFiles });
     } else {
-      await createNewPost({ category, title, body, file, fileType });
+      await createNewPost({ category, title, body, file, fileType, extraImageFiles });
     }
     exitEditMode();
     await loadPostList();

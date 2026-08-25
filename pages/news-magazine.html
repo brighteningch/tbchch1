@@ -103,7 +103,12 @@ function nmThumbHtml(post) {
 // (Ctrl/Cmd/휠클릭)·주소 복사·JS 비활성 상태에서도 자연스럽게 동작한다. 클릭 핸들러는
 // 그런 특수 클릭을 가로채지 않고(navigateToPost 참고) 일반 좌클릭만 SPA 전환한다.
 function nmCardHtml(post) {
-  const badge = post.file_type === 'pdf' ? 'PDF' : post.file_type === 'epub' ? 'EPUB' : '사진';
+  // ★2026-08-25: 매거진 다중이미지 — file_type='image'인 글에 magazine_post_images가
+  // 붙어있으면(admin-magazine.html에서 2장 이상 첨부) 배지에 총 장수를 보여준다(file_url
+  // 1장 + magazine_post_images N장 = 총 N+1장). 이미지가 아니거나 추가 이미지가 없으면
+  // 기존 배지 그대로.
+  const extraCount = (post.file_type === 'image' && post.magazine_post_images) ? post.magazine_post_images.length : 0;
+  const badge = post.file_type === 'pdf' ? 'PDF' : post.file_type === 'epub' ? 'EPUB' : (extraCount > 0 ? `사진 ${extraCount + 1}장` : '사진');
   return `
     <a href="?post=${encodeURIComponent(post.id)}" class="magazine-nm-card" data-post-id="${post.id}">
       ${nmThumbHtml(post)}
@@ -203,7 +208,19 @@ function openNmLightbox(post) {
   linkEl.href = post.file_url;
   downloadEl.href = nmDownloadUrl(post);
   if (post.file_type === 'image') {
-    bodyEl.innerHTML = `<img src="${post.file_url}" alt="${escHtml(post.title)}">`;
+    // ★2026-08-25: 매거진 다중이미지 — magazine_post_images가 있으면(2장 이상 첨부된
+    // 글) next-children.html의 상세 갤러리(전체너비로 세로 나열)와 동일한 방식으로
+    // file_url(대표 1번째)+나머지 전체를 sort_order 순서대로 보여준다. 없으면(기존
+    // PDF/EPUB/단일이미지 글과 동일) 기존 단일 이미지 렌더링 그대로.
+    const extraImages = (post.magazine_post_images || []).slice().sort((a, b) => a.sort_order - b.sort_order);
+    if (extraImages.length > 0) {
+      const allImages = [post.file_url, ...extraImages.map(img => img.image_url)];
+      bodyEl.innerHTML = `<div class="nm-lightbox-gallery">${allImages.map(url =>
+        `<img src="${escHtml(url)}" alt="${escHtml(post.title)}" style="width:100%;border-radius:10px;margin-bottom:12px;display:block;">`
+      ).join('')}</div>`;
+    } else {
+      bodyEl.innerHTML = `<img src="${post.file_url}" alt="${escHtml(post.title)}">`;
+    }
   } else if (post.file_type === 'epub') {
     // ★2026-08-13: 오너가 AskUserQuestion으로 명시적으로 선택한 방식 — 단순 다운로드
     // 링크가 아니라 실제 책장 넘기듯 읽는 인앱 리더(epub.js). 페이지 이동은 이전/다음

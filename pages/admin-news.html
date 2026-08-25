@@ -86,14 +86,14 @@
           <label>날짜
             <input type="date" id="bulletin-date" required>
           </label>
-          <label>주보 파일 (이미지 또는 PDF)
-            <input type="file" id="bulletin-file" accept="image/*,application/pdf">
+          <label>주보 파일 (이미지 또는 PDF, 여러 장 첨부 가능)
+            <input type="file" id="bulletin-file" accept="image/*,application/pdf" multiple>
           </label>
         </div>
         <label>내용 (선택)
           <textarea id="bulletin-body" rows="4" placeholder="필요하면 간단한 설명을 적어주세요."></textarea>
         </label>
-        <p class="field-hint">수정 시 파일을 다시 선택하지 않으면 기존 파일이 그대로 유지됩니다.</p>
+        <p class="field-hint">이미지 또는 PDF를 여러 장 한 번에 선택할 수 있습니다. 수정 시 파일을 다시 선택하면 기존 파일 전체가 새로 고른 파일로 교체되고, 파일을 고르지 않으면 기존 파일이 그대로 유지됩니다.</p>
         <div class="sermon-form-actions">
           <button type="submit" class="btn btn-primary" id="bulletin-submit-btn">등록하기</button>
           <button type="button" class="btn btn-ghost" id="bulletin-cancel-btn" hidden>수정 취소</button>
@@ -125,6 +125,19 @@
 function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 const NEWS_BUCKET = 'devotion-images';
 
+// ★2026-08-25: 주보 다중파일 확장 — 새 글부터는 data.files=[{fileUrl,filePath,fileType},...]
+// 배열로 저장하지만, 이미 등록된(또는 앞으로도 계속 만들어질 수 있는 공지사항 쪽) 단수
+// data.fileUrl/filePath/fileType 글도 데이터 마이그레이션 없이 그대로 호환돼야 한다.
+// data.files가 있으면 그대로, 없고 fileUrl이 있으면 하나짜리 배열로 정규화해서 목록·상세가
+// 항상 같은 배열 순회 코드 경로를 타게 만든다(공지사항 데이터에도 안전 — 그쪽은 다중 저장을
+// 아예 안 쓰므로 files가 없고 fileUrl 분기 또는 빈 배열만 나온다).
+function normalizeWeeklyFiles(data) {
+  const d = data || {};
+  if (Array.isArray(d.files) && d.files.length > 0) return d.files;
+  if (d.fileUrl) return [{ fileUrl: d.fileUrl, filePath: d.filePath, fileType: d.fileType }];
+  return [];
+}
+
 document.querySelectorAll('.admin-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
@@ -135,7 +148,11 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
 });
 
 // 공지사항/주보 둘 다 동일한 형태(제목+날짜+선택적 글+선택적 파일)라 하나의 팩토리로 만든다.
-function setupNewsTab(category, prefix, folder) {
+// ★2026-08-25: multiFile(기본 false)을 4번째 인자로 추가 — 주보 호출(아래
+// setupNewsTab('bulletin', 'bulletin', 'bulletin', true))에만 true를 넘겨 다중파일 저장
+// 분기를 켠다. 공지사항 호출부는 인자를 그대로 3개만 넘기므로 multiFile=false로 완전히
+// 기존 동작 그대로 유지된다(이 티켓 범위는 주보만 — 공지사항 무접촉).
+function setupNewsTab(category, prefix, folder, multiFile) {
   let list = [];
 
   function resetForm() {
@@ -153,11 +170,15 @@ function setupNewsTab(category, prefix, folder) {
     empty.hidden = true;
     tbody.innerHTML = list.map(item => {
       const d = item.data || {};
+      const attachedFiles = normalizeWeeklyFiles(d);
+      const attachLabel = attachedFiles.length === 0 ? '-'
+        : attachedFiles.length === 1 ? (attachedFiles[0].fileType === 'pdf' ? 'PDF' : attachedFiles[0].fileType === 'image' ? '이미지' : '-')
+        : `파일 ${attachedFiles.length}개`;
       return `
       <tr>
         <td>${esc(item.title)}</td>
         <td>${esc(item.period)}</td>
-        <td>${d.fileType === 'pdf' ? 'PDF' : (d.fileType === 'image' ? '이미지' : '-')}</td>
+        <td>${attachLabel}</td>
         <td>
           <button type="button" class="btn btn-ghost btn-sm" data-edit="${item.id}">수정</button>
           <button type="button" class="btn btn-ghost btn-sm" data-delete="${item.id}">삭제</button>
@@ -189,9 +210,12 @@ function setupNewsTab(category, prefix, folder) {
     const item = list.find(x => x.id === id);
     try {
       await deleteWeeklyContent(id);
-      if (item && item.data && item.data.filePath) {
-        const sb = requireSupabaseClient();
-        await sb.storage.from(NEWS_BUCKET).remove([item.data.filePath]);
+      if (item && item.data) {
+        const paths = normalizeWeeklyFiles(item.data).map(f => f.filePath).filter(Boolean);
+        if (paths.length > 0) {
+          const sb = requireSupabaseClient();
+          await sb.storage.from(NEWS_BUCKET).remove(paths);
+        }
       }
       await loadList();
     } catch (err) {
@@ -208,7 +232,10 @@ function setupNewsTab(category, prefix, folder) {
     const title = document.getElementById(prefix + '-title').value.trim();
     const date = document.getElementById(prefix + '-date').value;
     const body = document.getElementById(prefix + '-body').value.trim();
-    const file = document.getElementById(prefix + '-file').files[0];
+    // ★2026-08-25: bulletin-file에 multiple이 붙으면서 files[0]만 보던 기존 코드로는
+    // 2번째 파일부터 무시된다 — 전체 FileList를 배열로 받는다(공지사항은 input에 multiple이
+    // 없어 files.length가 항상 0 또는 1이므로 아래 분기가 자동으로 기존과 동일하게 동작).
+    const files = Array.from(document.getElementById(prefix + '-file').files || []);
     const submitBtn = document.getElementById(prefix + '-submit-btn');
     submitBtn.disabled = true;
     try {
@@ -218,18 +245,44 @@ function setupNewsTab(category, prefix, folder) {
         const existing = list.find(x => x.id === id);
         fileData = existing ? existing.data : null;
       }
-      if (file) {
+      if (files.length > 0) {
         submitBtn.textContent = '업로드 중…';
-        const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-        const fileType = file.type === 'application/pdf' || ext === 'pdf' ? 'pdf' : 'image';
-        const path = `${folder}/${date}-${Date.now()}.${ext}`;
-        const { error: uploadError } = await sb.storage.from(NEWS_BUCKET).upload(path, file, { upsert: false });
-        if (uploadError) throw uploadError;
-        const { data: pub } = sb.storage.from(NEWS_BUCKET).getPublicUrl(path);
-        fileData = { fileUrl: pub.publicUrl, filePath: path, fileType };
+        if (multiFile) {
+          // 새 파일을 선택하면 여러 장을 전부 올려 data.files 배열로 저장한다(신규 저장은
+          // 항상 배열만 쓰고, 구 단수 필드 fileUrl/filePath/fileType은 새 글부터 더는
+          // 쓰지 않는다 — 단, 읽는 쪽 코드에서 완전히 지우지는 않아 기존 글과 호환된다).
+          const uploadedFiles = [];
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
+            const fileType = f.type === 'application/pdf' || ext === 'pdf' ? 'pdf' : 'image';
+            // 같은 밀리초에 여러 파일이 올라갈 수 있어 인덱스를 경로에 덧붙인다(기존 단일
+            // 파일 경로 규칙 `${folder}/${date}-${Date.now()}.${ext}`은 그대로 재사용).
+            const path = `${folder}/${date}-${Date.now()}-${i}.${ext}`;
+            const { error: uploadError } = await sb.storage.from(NEWS_BUCKET).upload(path, f, { upsert: false });
+            if (uploadError) throw uploadError;
+            const { data: pub } = sb.storage.from(NEWS_BUCKET).getPublicUrl(path);
+            uploadedFiles.push({ fileUrl: pub.publicUrl, filePath: path, fileType });
+          }
+          fileData = { files: uploadedFiles };
+        } else {
+          const file = files[0];
+          const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+          const fileType = file.type === 'application/pdf' || ext === 'pdf' ? 'pdf' : 'image';
+          const path = `${folder}/${date}-${Date.now()}.${ext}`;
+          const { error: uploadError } = await sb.storage.from(NEWS_BUCKET).upload(path, file, { upsert: false });
+          if (uploadError) throw uploadError;
+          const { data: pub } = sb.storage.from(NEWS_BUCKET).getPublicUrl(path);
+          fileData = { fileUrl: pub.publicUrl, filePath: path, fileType };
+        }
       }
       submitBtn.textContent = id ? '수정 저장' : '등록하기';
-      const payload = { category, title, period: date, data: { body, ...(fileData || {}) } };
+      // ★2026-08-25 직접 발견·수정(과제 범위와 무관한 별도 버그 — master에게 별도 보고):
+      // 원래는 `{ body, ...(fileData || {}) }` 순서였다 — 파일을 새로 안 고른 수정에서는
+      // fileData가 existing.data 전체(과거에 저장된 body 포함)라서, 뒤에 스프레드된 옛
+      // body가 방금 입력한 새 body를 조용히 덮어써 "본문만 고쳐도 저장이 안 되는" 버그가
+      // 있었다. fileData를 먼저 펼치고 body를 마지막에 둬서 항상 최신 입력값이 이기게 한다.
+      const payload = { category, title, period: date, data: { ...(fileData || {}), body } };
       if (id) await updateWeeklyContent(id, payload); else await createWeeklyContent(payload);
       resetForm();
       await loadList();
@@ -246,7 +299,7 @@ function setupNewsTab(category, prefix, folder) {
 }
 
 const noticeTab = setupNewsTab('notice', 'notice', 'notice');
-const bulletinTab = setupNewsTab('bulletin', 'bulletin', 'bulletin');
+const bulletinTab = setupNewsTab('bulletin', 'bulletin', 'bulletin', true);
 
 async function initAdminNewsPage() {
   const profile = await getCurrentProfile();
