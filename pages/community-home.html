@@ -37,8 +37,8 @@
         <label>날짜
           <input type="date" id="fw-date" required>
         </label>
-        <label>이미지 파일
-          <input type="file" id="fw-image" accept="image/*" required>
+        <label>이미지 파일 (여러 장 첨부 가능)
+          <input type="file" id="fw-image" accept="image/*" required multiple>
         </label>
       </div>
       <div class="sermon-form-actions">
@@ -82,7 +82,9 @@
   </div>
   <div class="lightbox-body" style="display:flex;justify-content:center;">
     <div style="max-width:640px;width:100%;text-align:center;">
-      <img id="fwLightboxImage" style="max-width:100%;max-height:76vh;border-radius:10px;" alt="가정예배 순서지">
+      <!-- ★2026-08-26: 순서지 다중이미지 확장 — 고정 <img> 1개 대신, 매거진 상세 갤러리와
+           동일한 방식(전체너비 세로나열)으로 여러 장을 이 컨테이너 안에 렌더링한다. -->
+      <div id="fwLightboxImages"></div>
       <button type="button" class="btn btn-ghost btn-sm" id="fwLightboxDeleteBtn" hidden style="margin-top:16px;">삭제</button>
     </div>
   </div>
@@ -139,6 +141,17 @@ let __fwItems = [];
 
 function fwDateLabel(d) { return (d || '').replace(/-/g, '.'); }
 
+// ★2026-08-26: 가정예배 순서지 다중이미지 확장 — 이 섹션은 다른 둘(공지사항/편집부자료)과
+// 필드명이 다르다(fileUrl/filePath/fileType이 아니라 imageUrl/imagePath만, fileType 없음
+// — 이미지 전용이라 필요 없음). data.images 배열이 있으면 그대로, 없고 imageUrl이 있으면
+// (기존 단수 필드 레거시 글) 하나짜리 배열로 정규화한다(하위호환).
+function normalizeFwImages(data) {
+  const d = data || {};
+  if (Array.isArray(d.images) && d.images.length > 0) return d.images;
+  if (d.imageUrl) return [{ imageUrl: d.imageUrl, imagePath: d.imagePath }];
+  return [];
+}
+
 async function loadFamilyWorshipList() {
   const grid = document.getElementById('fwGrid');
   const empty = document.getElementById('fwEmpty');
@@ -149,12 +162,17 @@ async function loadFamilyWorshipList() {
     return;
   }
   empty.hidden = true;
-  grid.innerHTML = __fwItems.map(item => `
+  grid.innerHTML = __fwItems.map(item => {
+    // 썸네일은 배열의 첫 이미지만 사용한다(next-children/매거진 카드 썸네일과 동일 원칙).
+    const images = normalizeFwImages(item.data);
+    const thumbUrl = images[0] ? images[0].imageUrl : '';
+    return `
     <button type="button" class="gallery-album-card" data-id="${item.id}">
-      <div class="gallery-album-thumb"><img src="${(item.data && item.data.imageUrl) || ''}" alt="가정예배 순서지" loading="lazy"></div>
-      <p class="gallery-album-title">가정예배 순서지</p>
+      <div class="gallery-album-thumb"><img src="${thumbUrl}" alt="가정예배 순서지" loading="lazy"></div>
+      <p class="gallery-album-title">가정예배 순서지${images.length > 1 ? ` (${images.length}장)` : ''}</p>
       <p class="gallery-album-date">${fwDateLabel(item.period)}</p>
-    </button>`).join('');
+    </button>`;
+  }).join('');
   grid.querySelectorAll('[data-id]').forEach(btn => {
     btn.addEventListener('click', () => openFwLightbox(btn.dataset.id));
   });
@@ -164,16 +182,22 @@ function openFwLightbox(id) {
   const item = __fwItems.find(x => x.id === id);
   if (!item) return;
   document.getElementById('fwLightboxTitle').textContent = `가정예배 순서지 · ${fwDateLabel(item.period)}`;
-  document.getElementById('fwLightboxImage').src = (item.data && item.data.imageUrl) || '';
+  // ★2026-08-26: 매거진 상세 갤러리(news-magazine.html openNmLightbox)와 동일한 방식 —
+  // 전체 이미지를 전체너비로 세로 나열한다(고정 <img> 1개였던 것을 배열 순회로 확장).
+  const images = normalizeFwImages(item.data);
+  document.getElementById('fwLightboxImages').innerHTML = images.map(img =>
+    `<img src="${img.imageUrl}" alt="가정예배 순서지" style="max-width:100%;border-radius:10px;margin-bottom:12px;display:block;">`
+  ).join('');
   const delBtn = document.getElementById('fwLightboxDeleteBtn');
   delBtn.hidden = !window.__isAdminFw;
   delBtn.onclick = async () => {
     if (!confirm('이 순서지를 삭제할까요? 되돌릴 수 없습니다.')) return;
     try {
       await deleteWeeklyContent(item.id);
-      if (item.data && item.data.imagePath) {
+      const deletePaths = images.map(img => img.imagePath).filter(Boolean);
+      if (deletePaths.length > 0) {
         const sb = requireSupabaseClient();
-        await sb.storage.from(FW_BUCKET).remove([item.data.imagePath]);
+        await sb.storage.from(FW_BUCKET).remove(deletePaths);
       }
       document.getElementById('fwLightbox').hidden = true;
       await loadFamilyWorshipList();
@@ -192,21 +216,27 @@ document.getElementById('fwUploadForm').addEventListener('submit', async (e) => 
   const errorEl = document.getElementById('fw-error');
   errorEl.hidden = true;
   const date = document.getElementById('fw-date').value;
-  const file = document.getElementById('fw-image').files[0];
+  // ★2026-08-26: fw-image에 multiple이 붙어 2번째 파일부터도 처리해야 한다.
+  const files = Array.from(document.getElementById('fw-image').files || []);
   const submitBtn = document.getElementById('fw-submit-btn');
-  if (!date || !file) return;
+  if (!date || files.length === 0) return;
   submitBtn.disabled = true;
   submitBtn.textContent = '업로드 중…';
   try {
     const sb = requireSupabaseClient();
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const path = `${FW_FOLDER}/${date}-${Date.now()}.${ext}`;
-    const { error: uploadError } = await sb.storage.from(FW_BUCKET).upload(path, file, { upsert: false });
-    if (uploadError) throw uploadError;
-    const { data: pub } = sb.storage.from(FW_BUCKET).getPublicUrl(path);
+    const uploadedImages = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${FW_FOLDER}/${date}-${Date.now()}-${i}.${ext}`;
+      const { error: uploadError } = await sb.storage.from(FW_BUCKET).upload(path, file, { upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: pub } = sb.storage.from(FW_BUCKET).getPublicUrl(path);
+      uploadedImages.push({ imageUrl: pub.publicUrl, imagePath: path });
+    }
     await createWeeklyContent({
       category: 'family-worship', title: date, period: date,
-      data: { imageUrl: pub.publicUrl, imagePath: path },
+      data: { images: uploadedImages },
     });
     document.getElementById('fwUploadForm').reset();
     await loadFamilyWorshipList();

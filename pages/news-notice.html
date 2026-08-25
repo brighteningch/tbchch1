@@ -48,8 +48,12 @@ function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(
       return;
     }
     list.innerHTML = items.map(n => {
+      // ★2026-08-26: 다중파일 글은 fileUrl이 비어있고 files 배열에만 첨부가 있으므로,
+      // fileUrl 단독이 아니라 files 배열 존재 여부로 📎 표시를 판단한다(fetchMergedNotices가
+      // 레거시 단수 필드 글도 files 배열로 정규화해서 내려주므로 신구 글 모두 이 조건 하나로 처리됨).
+      const hasAttachment = n.files && n.files.length > 0;
       const titleHtml = n.id
-        ? `<a href="/pages/news-notice-view.html?id=${encodeURIComponent(n.id)}" style="color:inherit;text-decoration:none;">${escHtml(n.title)}${n.fileUrl ? ' 📎' : ''}</a>`
+        ? `<a href="/pages/news-notice-view.html?id=${encodeURIComponent(n.id)}" style="color:inherit;text-decoration:none;">${escHtml(n.title)}${hasAttachment ? ' 📎' : ''}</a>`
         : escHtml(n.title);
       const body = (!n.id && n.body) ? `<p style="margin-top:8px;color:var(--text-gray);font-size:14px;">${escHtml(n.body).replace(/\n/g,'<br>')}</p>` : '';
       return `<li style="display:block;"><div><span class="notice-date">${n.date}</span><span class="notice-title">${titleHtml}</span></div>${body}</li>`;

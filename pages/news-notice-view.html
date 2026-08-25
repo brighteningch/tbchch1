@@ -40,6 +40,17 @@ function escHtml(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(
 const params = new URLSearchParams(location.search);
 const idParam = params.get('id') || '';
 
+// ★2026-08-26: admin-news.html의 normalizeWeeklyFiles와 동일한 정규화(이 프로젝트 컨벤션 —
+// 페이지마다 독립 인라인 스크립트, 공유 뷰 모듈 없음 — 을 따라 그대로 복제). data.files
+// 배열이 있으면 그대로, 없고 fileUrl이 있으면(기존 단수 필드 레거시 글) 하나짜리 배열로
+// 정규화해서 아래 렌더링이 항상 같은 배열 순회 코드 경로를 타게 한다(하위호환).
+function normalizeWeeklyFiles(data) {
+  const d = data || {};
+  if (Array.isArray(d.files) && d.files.length > 0) return d.files;
+  if (d.fileUrl) return [{ fileUrl: d.fileUrl, filePath: d.filePath, fileType: d.fileType }];
+  return [];
+}
+
 (async function () {
   try {
     const item = await fetchWeeklyContentById(idParam);
@@ -48,14 +59,21 @@ const idParam = params.get('id') || '';
     document.getElementById('noticeDate').textContent = item.period || '';
     document.getElementById('noticeBody').innerHTML = (d.body || '').split('\n').map(l => escHtml(l)).join('<br>');
 
+    // ★2026-08-26: 공지사항 다중파일 — data.files(신규 다중 저장) 또는 기존 단수 필드
+    // (레거시 글)를 normalizeWeeklyFiles로 같은 배열 형태로 맞춰 순회 렌더링한다.
     const fileWrap = document.getElementById('noticeFileWrap');
-    if (d.fileType === 'image' && d.fileUrl) {
-      fileWrap.innerHTML = `<img src="${d.fileUrl}" alt="${escHtml(item.title)}" style="max-width:100%;border-radius:12px;">`;
-    } else if (d.fileType === 'pdf' && d.fileUrl) {
-      fileWrap.innerHTML = `
-        <iframe src="${d.fileUrl}" style="width:100%;height:600px;border:1px solid var(--border-light);border-radius:12px;"></iframe>
-        <div style="text-align:center;margin-top:12px;"><a href="${d.fileUrl}" target="_blank" rel="noopener" class="btn btn-ghost">PDF 새 탭에서 열기 ↗</a></div>`;
-    }
+    const noticeFiles = normalizeWeeklyFiles(d);
+    fileWrap.innerHTML = noticeFiles.map(f => {
+      if (f.fileType === 'image' && f.fileUrl) {
+        return `<img src="${escHtml(f.fileUrl)}" alt="${escHtml(item.title)}" style="max-width:100%;border-radius:12px;margin-bottom:16px;display:block;">`;
+      }
+      if (f.fileType === 'pdf' && f.fileUrl) {
+        return `
+          <iframe src="${escHtml(f.fileUrl)}" style="width:100%;height:600px;border:1px solid var(--border-light);border-radius:12px;"></iframe>
+          <div style="text-align:center;margin:12px 0 16px;"><a href="${escHtml(f.fileUrl)}" target="_blank" rel="noopener" class="btn btn-ghost">PDF 새 탭에서 열기 ↗</a></div>`;
+      }
+      return '';
+    }).join('');
 
     const profile = await getCurrentProfile();
     if (profile && profile.is_admin) {
@@ -69,9 +87,10 @@ const idParam = params.get('id') || '';
         if (!confirm('이 공지를 삭제할까요? 되돌릴 수 없습니다.')) return;
         try {
           await deleteWeeklyContent(item.id);
-          if (d.filePath) {
+          const deletePaths = noticeFiles.map(f => f.filePath).filter(Boolean);
+          if (deletePaths.length > 0) {
             const sb = requireSupabaseClient();
-            await sb.storage.from('devotion-images').remove([d.filePath]);
+            await sb.storage.from('devotion-images').remove(deletePaths);
           }
           location.href = '/pages/news-notice.html';
         } catch (err) {

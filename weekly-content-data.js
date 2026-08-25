@@ -47,9 +47,16 @@ async function fetchMergedNotices() {
   const staticItems = (staticRes.notices || []).map(n => ({
     id: null, date: n.date, title: n.title, body: n.body || '', fileUrl: null, fileType: null,
   }));
+  // ★2026-08-26: 공지사항 다중파일 확장 — 새 글은 d.fileUrl 대신 d.files 배열에 저장되므로,
+  // 목록(news-notice.html)이 첨부 유무를 판단할 때 쓰는 fileUrl만 보면 다중파일 글은
+  // 첨부가 있어도 없는 것처럼 보인다. admin-news.html의 normalizeWeeklyFiles와 동일한
+  // 정규화 결과를 files로 함께 내려준다(레거시 단수 fileUrl 글은 하나짜리 배열로 정규화).
   const dbNormalized = dbItems.map(item => {
     const d = item.data || {};
-    return { id: item.id, date: item.period, title: item.title, body: d.body || '', fileUrl: d.fileUrl || null, fileType: d.fileType || null };
+    const files = Array.isArray(d.files) && d.files.length > 0
+      ? d.files
+      : (d.fileUrl ? [{ fileUrl: d.fileUrl, filePath: d.filePath, fileType: d.fileType }] : []);
+    return { id: item.id, date: item.period, title: item.title, body: d.body || '', fileUrl: d.fileUrl || null, fileType: d.fileType || null, files };
   });
   return [...staticItems, ...dbNormalized].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }

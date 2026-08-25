@@ -33,14 +33,14 @@
         <label>날짜
           <input type="date" id="ed-date" required>
         </label>
-        <label>자료 파일 (이미지 또는 PDF)
-          <input type="file" id="ed-file" accept="image/*,application/pdf">
+        <label>자료 파일 (이미지 또는 PDF, 여러 장 첨부 가능)
+          <input type="file" id="ed-file" accept="image/*,application/pdf" multiple>
         </label>
       </div>
       <label>간단한 글
         <textarea id="ed-body" rows="6" placeholder="자료에 대한 간단한 설명을 적어주세요."></textarea>
       </label>
-      <p class="field-hint">수정 시 파일을 다시 선택하지 않으면 기존 파일이 그대로 유지됩니다.</p>
+      <p class="field-hint">이미지 또는 PDF를 여러 장 한 번에 선택할 수 있습니다. 수정 시 파일을 다시 선택하면 기존 파일 전체가 새로 고른 파일로 교체되고, 파일을 고르지 않으면 기존 파일이 그대로 유지됩니다.</p>
       <div class="sermon-form-actions">
         <button type="submit" class="btn btn-primary" id="ed-submit-btn">등록하기</button>
         <button type="button" class="btn btn-ghost" id="ed-cancel-btn" hidden>수정 취소</button>
@@ -72,6 +72,16 @@ function esc(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g
 const ED_BUCKET = 'devotion-images';
 const ED_FOLDER = 'editorial';
 
+// ★2026-08-26: admin-news.html의 normalizeWeeklyFiles와 동일한 정규화(이 페이지는 공유
+// 팩토리 없이 완전히 독립된 스크립트라 그대로 복제). data.files 배열이 있으면 그대로,
+// 없고 fileUrl이 있으면(기존 단수 필드 레거시 글) 하나짜리 배열로 정규화한다(하위호환).
+function normalizeWeeklyFiles(data) {
+  const d = data || {};
+  if (Array.isArray(d.files) && d.files.length > 0) return d.files;
+  if (d.fileUrl) return [{ fileUrl: d.fileUrl, filePath: d.filePath, fileType: d.fileType }];
+  return [];
+}
+
 let __edList = [];
 
 function resetEdForm() {
@@ -89,11 +99,15 @@ async function loadEdList() {
   empty.hidden = true;
   tbody.innerHTML = __edList.map(item => {
     const d = item.data || {};
+    const attachedFiles = normalizeWeeklyFiles(d);
+    const attachLabel = attachedFiles.length === 0 ? '-'
+      : attachedFiles.length === 1 ? (attachedFiles[0].fileType === 'pdf' ? 'PDF' : attachedFiles[0].fileType === 'image' ? '이미지' : '-')
+      : `파일 ${attachedFiles.length}개`;
     return `
     <tr>
       <td>${esc(item.title)}</td>
       <td>${esc(item.period)}</td>
-      <td>${d.fileType === 'pdf' ? 'PDF' : (d.fileType === 'image' ? '이미지' : '-')}</td>
+      <td>${attachLabel}</td>
       <td>
         <button type="button" class="btn btn-ghost btn-sm" data-edit="${item.id}">수정</button>
         <button type="button" class="btn btn-ghost btn-sm" data-delete="${item.id}">삭제</button>
@@ -121,9 +135,12 @@ async function removeEd(id) {
   const item = __edList.find(x => x.id === id);
   try {
     await deleteWeeklyContent(id);
-    if (item && item.data && item.data.filePath) {
-      const sb = requireSupabaseClient();
-      await sb.storage.from(ED_BUCKET).remove([item.data.filePath]);
+    if (item && item.data) {
+      const paths = normalizeWeeklyFiles(item.data).map(f => f.filePath).filter(Boolean);
+      if (paths.length > 0) {
+        const sb = requireSupabaseClient();
+        await sb.storage.from(ED_BUCKET).remove(paths);
+      }
     }
     await loadEdList();
   } catch (err) {
@@ -140,7 +157,9 @@ document.getElementById('edForm').addEventListener('submit', async (e) => {
   const title = document.getElementById('ed-title').value.trim();
   const date = document.getElementById('ed-date').value;
   const body = document.getElementById('ed-body').value.trim();
-  const file = document.getElementById('ed-file').files[0];
+  // ★2026-08-26: ed-file에 multiple이 붙어 2번째 파일부터도 처리해야 한다 — 전체
+  // FileList를 배열로 받는다(admin-news.html 주보/공지사항과 동일 패턴).
+  const files = Array.from(document.getElementById('ed-file').files || []);
   const submitBtn = document.getElementById('ed-submit-btn');
   submitBtn.disabled = true;
   try {
@@ -150,20 +169,34 @@ document.getElementById('edForm').addEventListener('submit', async (e) => {
       const existing = __edList.find(x => x.id === id);
       fileData = existing ? existing.data : null;
     }
-    if (file) {
+    if (files.length > 0) {
       submitBtn.textContent = '업로드 중…';
-      const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-      const fileType = file.type === 'application/pdf' || ext === 'pdf' ? 'pdf' : 'image';
-      const path = `${ED_FOLDER}/${date}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await sb.storage.from(ED_BUCKET).upload(path, file, { upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: pub } = sb.storage.from(ED_BUCKET).getPublicUrl(path);
-      fileData = { fileUrl: pub.publicUrl, filePath: path, fileType };
+      // 새 파일을 선택하면(1장이든 여러장이든) 전부 올려 data.files 배열로 저장한다
+      // (이 페이지는 setupNewsTab처럼 다른 탭과 공유하지 않는 독립 스크립트라 bulletin/
+      // notice처럼 multiFile 플래그로 단일/다중을 분기할 필요가 없다 — 항상 배열).
+      const uploadedFiles = [];
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
+        const fileType = f.type === 'application/pdf' || ext === 'pdf' ? 'pdf' : 'image';
+        const path = `${ED_FOLDER}/${date}-${Date.now()}-${i}.${ext}`;
+        const { error: uploadError } = await sb.storage.from(ED_BUCKET).upload(path, f, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: pub } = sb.storage.from(ED_BUCKET).getPublicUrl(path);
+        uploadedFiles.push({ fileUrl: pub.publicUrl, filePath: path, fileType });
+      }
+      fileData = { files: uploadedFiles };
     }
     submitBtn.textContent = id ? '수정 저장' : '등록하기';
+    // ★2026-08-26 직접 발견·수정(admin-news.html 280행에서 이미 확인된 것과 동일한 버그
+    // 패턴 — 별도 코드지만 같은 실수가 반복돼 있었다): 원래 `{ body, ...(fileData||{}) }`
+    // 순서였다. 파일을 새로 안 고른 수정에서는 fileData=existing.data 전체(과거 body
+    // 포함)라, 뒤에 스프레드되는 옛 body가 방금 입력한 새 body를 조용히 덮어써 "본문만
+    // 고쳐도 저장 안 됨" 버그가 있었다. fileData를 먼저 펼치고 body를 마지막에 둬서
+    // 항상 최신 입력값이 이기게 한다 — master에게 별도 보고 예정(과제 범위와 무관).
     const payload = {
       category: 'editorial', title, period: date,
-      data: { body, ...(fileData || {}) },
+      data: { ...(fileData || {}), body },
     };
     if (id) await updateWeeklyContent(id, payload); else await createWeeklyContent(payload);
     resetEdForm();

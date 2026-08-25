@@ -53,7 +53,15 @@ const ED_PER_PAGE = 15;
       const d = item.data || {};
       const link = `/pages/community-editorial-view.html?id=${encodeURIComponent(item.id)}`;
       const num = items.length - (start + i);
-      const formatLabel = d.fileType === 'pdf' ? 'PDF' : (d.fileType === 'image' ? '이미지' : '-');
+      // ★2026-08-26: 다중파일 자료(d.files 배열)는 d.fileType이 없어 기존 조건으론 '-'로
+      // 잘못 표시된다 — admin-editorial.html의 normalizeWeeklyFiles와 동일한 판단(이
+      // 페이지도 독립 스크립트라 그대로 복제)으로 파일 개수를 정확히 표시한다.
+      const attachedFiles = Array.isArray(d.files) && d.files.length > 0
+        ? d.files
+        : (d.fileUrl ? [{ fileType: d.fileType }] : []);
+      const formatLabel = attachedFiles.length === 0 ? '-'
+        : attachedFiles.length === 1 ? (attachedFiles[0].fileType === 'pdf' ? 'PDF' : attachedFiles[0].fileType === 'image' ? '이미지' : '-')
+        : `파일 ${attachedFiles.length}개`;
       return `
       <tr>
         <td>${num}</td>

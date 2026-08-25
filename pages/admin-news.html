@@ -48,14 +48,14 @@
           <label>날짜
             <input type="date" id="notice-date" required>
           </label>
-          <label>첨부파일 (이미지 또는 PDF, 선택)
-            <input type="file" id="notice-file" accept="image/*,application/pdf">
+          <label>첨부파일 (이미지 또는 PDF, 선택, 여러 장 첨부 가능)
+            <input type="file" id="notice-file" accept="image/*,application/pdf" multiple>
           </label>
         </div>
         <label>내용
           <textarea id="notice-body" rows="6" placeholder="공지 내용을 적어주세요."></textarea>
         </label>
-        <p class="field-hint">수정 시 파일을 다시 선택하지 않으면 기존 파일이 그대로 유지됩니다.</p>
+        <p class="field-hint">이미지 또는 PDF를 여러 장 한 번에 선택할 수 있습니다. 수정 시 파일을 다시 선택하면 기존 파일 전체가 새로 고른 파일로 교체되고, 파일을 고르지 않으면 기존 파일이 그대로 유지됩니다.</p>
         <div class="sermon-form-actions">
           <button type="submit" class="btn btn-primary" id="notice-submit-btn">등록하기</button>
           <button type="button" class="btn btn-ghost" id="notice-cancel-btn" hidden>수정 취소</button>
@@ -148,10 +148,10 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
 });
 
 // 공지사항/주보 둘 다 동일한 형태(제목+날짜+선택적 글+선택적 파일)라 하나의 팩토리로 만든다.
-// ★2026-08-25: multiFile(기본 false)을 4번째 인자로 추가 — 주보 호출(아래
-// setupNewsTab('bulletin', 'bulletin', 'bulletin', true))에만 true를 넘겨 다중파일 저장
-// 분기를 켠다. 공지사항 호출부는 인자를 그대로 3개만 넘기므로 multiFile=false로 완전히
-// 기존 동작 그대로 유지된다(이 티켓 범위는 주보만 — 공지사항 무접촉).
+// ★2026-08-25: multiFile(기본 false)을 4번째 인자로 추가 — 처음엔 주보 호출에만 true를
+// 넘겼다(당시 티켓 범위는 주보뿐이라 공지사항 호출부는 인자 3개 그대로 둬서 무접촉 유지).
+// ★2026-08-26: 후속 티켓으로 공지사항도 다중파일을 지원하게 됐다 — 함수 본문은 이미
+// 다중파일을 지원하므로 손대지 않고, 아래 noticeTab 호출부의 4번째 인자만 true로 바꿨다.
 function setupNewsTab(category, prefix, folder, multiFile) {
   let list = [];
 
@@ -298,7 +298,9 @@ function setupNewsTab(category, prefix, folder, multiFile) {
   return { loadList, startEdit };
 }
 
-const noticeTab = setupNewsTab('notice', 'notice', 'notice');
+// ★2026-08-26: 공지사항도 주보와 동일한 다중파일 인프라(이미 setupNewsTab 본문에 구현돼
+// 있음)를 켠다 — 함수 본문 변경 없이 4번째 인자만 true로 넘긴다.
+const noticeTab = setupNewsTab('notice', 'notice', 'notice', true);
 const bulletinTab = setupNewsTab('bulletin', 'bulletin', 'bulletin', true);
 
 async function initAdminNewsPage() {
