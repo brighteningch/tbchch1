@@ -17,7 +17,7 @@
 <section class="page-hero">
   <span class="page-badge">ADMIN</span>
   <h1>홈페이지 팝업 관리</h1>
-  <p>홈페이지 접속 시 뜨는 "이번 주 소식" 팝업(유튜브 쇼츠 또는 광고 이미지)을 등록·교체합니다.</p>
+  <p>홈페이지 접속 시 뜨는 "이번 주 소식" 팝업(유튜브 쇼츠 또는 광고 이미지)과 "잠언 묵상" 팝업(이미지)을 등록·교체합니다.</p>
   <div class="bar"></div>
 </section>
 
@@ -63,6 +63,38 @@
       </table>
     </div>
     <p class="sermon-empty" id="sc-empty" hidden>등록된 팝업이 없습니다.</p>
+
+    <div class="bar" style="margin:36px 0;"></div>
+
+    <form id="form-pv" class="sermon-form">
+      <div class="sermon-form-row">
+        <label>날짜
+          <input type="date" id="pv-date" required>
+        </label>
+      </div>
+      <label>잠언 묵상 이미지 파일
+        <input type="file" id="pv-image" accept="image/*">
+      </label>
+      <label>대체 텍스트(선택, 스크린리더용)
+        <input type="text" id="pv-alt" placeholder="예: 잠언 묵상 - 승리하는 지혜">
+      </label>
+      <div class="sermon-form-actions">
+        <button type="submit" class="btn btn-primary" id="pv-submit-btn">등록하기</button>
+      </div>
+      <p class="auth-error" id="pv-error" hidden></p>
+    </form>
+    <p class="field-hint">홈페이지에는 가장 최근에 등록한 항목 1개만 팝업으로 노출됩니다. 등록된 항목이 하나도 없으면 잠언 묵상 팝업 자체가 뜨지 않습니다.</p>
+
+    <div class="admin-toolbar" style="margin-top:36px;">
+      <p style="font-weight:700;">등록된 잠언 묵상 팝업</p>
+    </div>
+    <div class="sermon-table-wrap">
+      <table class="sermon-table">
+        <thead><tr><th>날짜</th><th>이미지</th><th>관리</th></tr></thead>
+        <tbody id="pv-tbody"></tbody>
+      </table>
+    </div>
+    <p class="sermon-empty" id="pv-empty" hidden>등록된 팝업이 없습니다.</p>
   </div>
 </div>
 
@@ -165,6 +197,75 @@ document.getElementById('form-sc').addEventListener('submit', async (e) => {
   }
 });
 
+let __pvList = [];
+const PV_BUCKET = 'devotion-images';
+const PV_FOLDER = 'popup-proverbs';
+
+async function loadProverbsList() {
+  __pvList = await fetchWeeklyContent('proverbs');
+  const tbody = document.getElementById('pv-tbody');
+  const empty = document.getElementById('pv-empty');
+  if (__pvList.length === 0) { tbody.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+  tbody.innerHTML = __pvList.map((item, i) => {
+    const d = item.data || {};
+    return `
+    <tr>
+      <td>${esc(item.period)}${i === 0 ? ' <span style="color:var(--navy);font-weight:700;">(노출중)</span>' : ''}</td>
+      <td><img class="dl-thumb" src="${esc(d.imageUrl || '')}" alt="${esc(d.alt || '')}"></td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-delete="${item.id}">삭제</button></td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => removeProverbs(btn.dataset.delete)));
+}
+
+async function removeProverbs(id) {
+  if (!confirm('이 팝업을 내릴까요? 되돌릴 수 없습니다.')) return;
+  const item = __pvList.find(x => x.id === id);
+  try {
+    await deleteWeeklyContent(id);
+    if (item && item.data && item.data.imagePath) {
+      const sb = requireSupabaseClient();
+      await sb.storage.from(PV_BUCKET).remove([item.data.imagePath]);
+    }
+    await loadProverbsList();
+  } catch (err) {
+    alert('삭제 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+document.getElementById('form-pv').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('pv-error');
+  errorEl.hidden = true;
+  const date = document.getElementById('pv-date').value;
+  const alt = document.getElementById('pv-alt').value.trim();
+  const submitBtn = document.getElementById('pv-submit-btn');
+  if (!date) return;
+  const file = document.getElementById('pv-image').files[0];
+  if (!file) return;
+  submitBtn.disabled = true;
+  try {
+    submitBtn.textContent = '업로드 중…';
+    const sb = requireSupabaseClient();
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${PV_FOLDER}/${date}-${Date.now()}.${ext}`;
+    const { error: uploadError } = await sb.storage.from(PV_BUCKET).upload(path, file, { upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: pub } = sb.storage.from(PV_BUCKET).getPublicUrl(path);
+    const data = { imageUrl: pub.publicUrl, imagePath: path, alt: alt || `잠언 묵상 ${date}` };
+    await createWeeklyContent({ category: 'proverbs', title: date, period: date, data });
+    document.getElementById('form-pv').reset();
+    await loadProverbsList();
+  } catch (err) {
+    errorEl.textContent = '저장 중 오류가 발생했습니다: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '등록하기';
+  }
+});
+
 async function initAdminPopupsPage() {
   const profile = await getCurrentProfile();
   if (!profile || !profile.is_admin) {
@@ -173,6 +274,7 @@ async function initAdminPopupsPage() {
   }
   document.getElementById('adminContent').hidden = false;
   await loadShortsList();
+  await loadProverbsList();
 }
 document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminPopupsPage, 400));
 </script>

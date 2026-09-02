@@ -332,8 +332,19 @@ function prepareSundayPopup() {
   return localStorage.getItem('verseModalDismissed') !== POPUP_TODAY_STR;
 }
 
-function prepareProverbsPopup() {
-  return localStorage.getItem('proverbsModalDismissed') !== POPUP_TODAY_STR;
+// 잠언 묵상(이미지): weekly_content(category='proverbs')의 최신 항목을 준비한다.
+// 등록된 게 없거나 오늘 하루 닫기 상태면 false를 반환해 팝업 자체를 건너뛴다.
+async function prepareProverbsPopup() {
+  if (localStorage.getItem('proverbsModalDismissed') === POPUP_TODAY_STR) return false;
+  let items = [];
+  try { items = await fetchWeeklyContent('proverbs'); } catch (err) { return false; }
+  const latest = items[0] && items[0].data;
+  if (!latest || !latest.imageUrl) return false;
+
+  const imageEl = document.getElementById('proverbsModalImage');
+  imageEl.src = latest.imageUrl;
+  imageEl.alt = latest.alt || '';
+  return true;
 }
 
 const POPUP_DEFS = [
@@ -352,6 +363,7 @@ const POPUP_DEFS = [
     id: 'proverbsModal', dismissKey: 'proverbsModalDismissed',
     closeBtn: 'proverbsModalClose', backdrop: 'proverbsModalBackdrop', hideToday: 'proverbsModalHideToday',
     prepare: prepareProverbsPopup,
+    cleanup: () => { document.getElementById('proverbsModalImage').src = ''; },
   },
 ];
 
