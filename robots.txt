@@ -1,0 +1,22 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /pages/admin-company.html
+Disallow: /pages/admin-editorial.html
+Disallow: /pages/admin-gallery.html
+Disallow: /pages/admin-magazine.html
+Disallow: /pages/admin-members.html
+Disallow: /pages/admin-nav-menu.html
+Disallow: /pages/admin-news.html
+Disallow: /pages/admin-popups.html
+Disallow: /pages/admin-sermons.html
+Disallow: /pages/admin-weekly-word.html
+Disallow: /pages/pastoral-attendance.html
+Disallow: /pages/pastoral-dashboard.html
+Disallow: /pages/pastoral-member-detail.html
+Disallow: /pages/pastoral-members.html
+Disallow: /pages/login.html
+Disallow: /pages/signup.html
+Disallow: /pages/change-password.html
+Allow: /
+
+Sitemap: https://brighteningch.co.kr/sitemap.xml
