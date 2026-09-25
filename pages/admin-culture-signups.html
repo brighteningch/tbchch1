@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>문화강좌 신청자 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .cs-count { font-size: 14px; color: var(--text-dark); margin-bottom: 16px; }
+  .cs-count b { color: var(--navy); font-size: 18px; }
+  .cs-table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .cs-table th, .cs-table td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--border-light); }
+  .cs-table th { color: #6b7688; font-weight: 700; font-size: 13px; }
+  .cs-del-btn { border: none; background: none; color: #b3261e; cursor: pointer; font-size: 13px; padding: 4px 8px; }
+  .cs-del-btn:hover { text-decoration: underline; }
+  .cs-empty { color: #6b7688; padding: 24px 0; text-align: center; }
+  .cs-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">ADMIN</span>
+  <h1>문화강좌 신청자 관리</h1>
+  <p>2026년 부모 초청 문화강좌 신청 명단입니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:640px;">
+  <div id="adminGuard" class="admin-guard" hidden>
+    <p>관리자만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="adminContent" hidden>
+    <div class="cs-toolbar">
+      <button type="button" class="btn btn-ghost btn-sm" id="cs-copy-btn">명단 복사</button>
+    </div>
+    <p class="cs-count">신청 인원 <b id="cs-count">0</b>명</p>
+    <table class="cs-table">
+      <thead><tr><th>이름</th><th>신청 시각</th><th></th></tr></thead>
+      <tbody id="cs-rows"></tbody>
+    </table>
+    <p class="cs-empty" id="cs-empty" hidden>아직 신청자가 없습니다.</p>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/common.js"></script>
+<script>
+let __rows = [];
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function loadSignups() {
+  const sb = getSupabaseClient();
+  const { data, error } = await sb.from('culture_class_signups').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('신청자 목록 조회 실패:', error); return; }
+  __rows = data || [];
+  document.getElementById('cs-count').textContent = __rows.length;
+  document.getElementById('cs-empty').hidden = __rows.length > 0;
+  document.getElementById('cs-rows').innerHTML = __rows.map(r => `
+    <tr>
+      <td>${r.name}</td>
+      <td>${fmtTime(r.created_at)}</td>
+      <td><button type="button" class="cs-del-btn" data-id="${r.id}">삭제</button></td>
+    </tr>`).join('');
+}
+
+document.getElementById('cs-rows').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.cs-del-btn');
+  if (!btn) return;
+  const sb = getSupabaseClient();
+  const { error } = await sb.from('culture_class_signups').delete().eq('id', btn.dataset.id);
+  if (error) { alert('삭제 실패: ' + error.message); return; }
+  await loadSignups();
+});
+
+document.getElementById('cs-copy-btn').addEventListener('click', async () => {
+  const text = __rows.map(r => `${r.name}\t${fmtTime(r.created_at)}`).join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('cs-copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = '복사됨!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch (err) {
+    console.error('클립보드 복사 실패:', err);
+  }
+});
+
+async function initAdminCultureSignupsPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_admin) {
+    document.getElementById('adminGuard').hidden = false;
+    return;
+  }
+  document.getElementById('adminContent').hidden = false;
+  await loadSignups();
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initAdminCultureSignupsPage, 400));
+</script>
+</body>
+</html>

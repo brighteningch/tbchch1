@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>부모 초청 문화강좌 신청 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap">
+<style>
+  .cc-hero {
+    background: linear-gradient(160deg, #7a4a2a 0%, #4a2f1c 100%);
+    color: #fbeedd;
+    padding: 56px 20px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .cc-hero::before {
+    content: "🍁";
+    position: absolute; top: 14px; left: 22px; font-size: 26px; opacity: 0.5; transform: rotate(-18deg);
+  }
+  .cc-hero::after {
+    content: "🍂";
+    position: absolute; bottom: 16px; right: 24px; font-size: 30px; opacity: 0.5; transform: rotate(14deg);
+  }
+  .cc-badge {
+    display: inline-block; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.3);
+    color: #f6e4cf; font-size: 12px; font-weight: 700; letter-spacing: 2px; padding: 6px 16px;
+    border-radius: 30px; margin-bottom: 16px;
+  }
+  .cc-hero h1 { font-family: 'Gowun Batang', 'Noto Serif KR', serif; font-size: 34px; font-weight: 700; line-height: 1.4; margin-bottom: 10px; }
+  .cc-hero p { color: #e8cdae; font-size: 15px; }
+  .cc-bar { width: 56px; height: 3px; background: #d98a3d; margin: 20px auto 0; border-radius: 2px; }
+
+  .cc-body { padding: 44px 20px 64px; max-width: 560px; margin: 0 auto; }
+
+  .cc-card {
+    background: #fffaf2; border: 1px solid #ecdcc4; border-radius: 16px; padding: 26px 22px; margin-bottom: 24px;
+    box-shadow: 0 2px 10px rgba(74,47,28,0.06);
+  }
+  .cc-card h2 { font-family: 'Gowun Batang', 'Noto Serif KR', serif; font-size: 18px; color: #4a2f1c; margin-bottom: 16px; }
+  .cc-schedule { list-style: none; padding: 0; margin: 0 0 16px; }
+  .cc-schedule li {
+    display: flex; gap: 12px; align-items: baseline; padding: 11px 0; border-bottom: 1px dashed #ecdcc4; font-size: 14.5px; color: #3e2b22;
+  }
+  .cc-schedule li:last-child { border-bottom: none; }
+  .cc-week { flex-shrink: 0; width: 40px; font-weight: 700; color: #c1622d; font-size: 13px; }
+  .cc-date { flex-shrink: 0; font-weight: 700; color: #4a2f1c; }
+  .cc-topic { flex: 1; }
+  .cc-teacher { flex-shrink: 0; font-size: 13px; color: #8a7461; }
+  .cc-time {
+    text-align: center; font-weight: 700; color: #4a2f1c; font-size: 15px; background: #f6e9d8;
+    border-radius: 10px; padding: 10px; margin-top: 4px;
+  }
+
+  .cc-form label { display: block; font-size: 13.5px; font-weight: 700; color: #4a2f1c; margin-bottom: 6px; }
+  .cc-form input {
+    width: 100%; box-sizing: border-box; padding: 13px 14px; border: 1.5px solid #ecdcc4; border-radius: 10px;
+    font-size: 15px; margin-bottom: 16px; font-family: inherit; color: #3e2b22; background: #fff;
+  }
+  .cc-form input:focus { outline: none; border-color: #c1622d; }
+  .cc-submit {
+    width: 100%; padding: 15px; border: none; border-radius: 12px; background: #c1622d; color: #fff;
+    font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.15s, opacity 0.15s;
+  }
+  .cc-submit:hover { transform: translateY(-2px); }
+  .cc-submit:disabled { opacity: 0.6; cursor: default; transform: none; }
+  .cc-error { color: #b3261e; font-size: 13.5px; margin-top: -8px; margin-bottom: 14px; display: none; }
+
+  .cc-done { text-align: center; padding: 20px 0; }
+  .cc-done-icon { font-size: 44px; margin-bottom: 12px; }
+  .cc-done h2 { font-family: 'Gowun Batang', 'Noto Serif KR', serif; font-size: 20px; color: #4a2f1c; margin-bottom: 8px; }
+  .cc-done p { color: #6b5847; font-size: 14.5px; }
+
+  @media (prefers-color-scheme: dark) {
+    .cc-card { background: #fffaf2; }
+  }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="cc-hero">
+  <span class="cc-badge" id="cc-badge">2026 · 10월</span>
+  <h1 id="cc-title">부모 초청<br>문화강좌</h1>
+  <p id="cc-subtitle">매주 토요일 오전 10시 30분 · 4주간</p>
+  <div class="cc-bar"></div>
+</section>
+
+<div class="cc-body">
+  <div class="cc-card">
+    <h2>강좌 내용</h2>
+    <ul class="cc-schedule" id="cc-schedule-list"></ul>
+    <div class="cc-time" id="cc-time-label">매주 토요일 오전 10시 30분</div>
+  </div>
+
+  <div class="cc-card" id="cc-form-card">
+    <h2>신청하기</h2>
+    <form class="cc-form" id="cc-form">
+      <label for="cc-name">이름</label>
+      <input type="text" id="cc-name" name="name" maxlength="30" autocomplete="name" required placeholder="홍길동">
+      <p class="cc-error" id="cc-error"></p>
+      <button type="submit" class="cc-submit" id="cc-submit-btn">신청합니다</button>
+    </form>
+    <div class="cc-done" id="cc-done" hidden>
+      <div class="cc-done-icon">🍁</div>
+      <h2>신청이 접수되었습니다</h2>
+      <p id="cc-done-note">10월, 토요일마다 뵙겠습니다.</p>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/settings-data.js"></script>
+<script src="/common.js"></script>
+<script>
+const CULTURE_CLASS_CONTENT_KEY = 'culture_class_signup_content';
+
+const CULTURE_CLASS_DEFAULT_CONTENT = {
+  badge: '2026 · 10월',
+  title: '부모 초청<br>문화강좌',
+  subtitle: '매주 토요일 오전 10시 30분 · 4주간',
+  timeLabel: '매주 토요일 오전 10시 30분',
+  closingNote: '10월, 토요일마다 뵙겠습니다.',
+  weeks: [
+    { week: '1주', date: '10/3(토)', topic: '핸드드립커피 1부', teacher: '박지환' },
+    { week: '2주', date: '10/10(토)', topic: '핸드드립커피 2부', teacher: '박지환' },
+    { week: '3주', date: '10/17(토)', topic: '케익 만들기', teacher: '이유리' },
+    { week: '4주', date: '10/24(토)', topic: '아로마 테라피', teacher: '김명선' },
+  ],
+};
+
+function renderCultureClassContent(content) {
+  document.getElementById('cc-badge').textContent = content.badge;
+  document.getElementById('cc-title').innerHTML = content.title;
+  document.getElementById('cc-subtitle').textContent = content.subtitle;
+  document.getElementById('cc-time-label').textContent = content.timeLabel;
+  document.getElementById('cc-done-note').textContent = content.closingNote;
+  document.getElementById('cc-schedule-list').innerHTML = (content.weeks || []).map(w => `
+    <li><span class="cc-week">${w.week}</span><span class="cc-date">${w.date}</span><span class="cc-topic">${w.topic}</span><span class="cc-teacher">${w.teacher}</span></li>
+  `).join('');
+}
+
+async function loadCultureClassContent() {
+  renderCultureClassContent(CULTURE_CLASS_DEFAULT_CONTENT);
+  try {
+    const raw = await fetchAppSetting(CULTURE_CLASS_CONTENT_KEY);
+    if (raw) renderCultureClassContent(JSON.parse(raw));
+  } catch (err) {
+    console.error('문화강좌 내용 조회 실패(기본값 표시):', err);
+  }
+}
+loadCultureClassContent();
+
+document.getElementById('cc-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('cc-error');
+  const btn = document.getElementById('cc-submit-btn');
+  const name = document.getElementById('cc-name').value.trim();
+  errorEl.style.display = 'none';
+
+  if (!name) {
+    errorEl.textContent = '이름을 입력해주세요.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '접수 중...';
+
+  try {
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error('페이지 준비 중입니다. 잠시 후 다시 시도해주세요.');
+    const { error } = await sb.from('culture_class_signups').insert({ name });
+    if (error) throw error;
+
+    document.getElementById('cc-form').hidden = true;
+    document.getElementById('cc-done').hidden = false;
+  } catch (err) {
+    console.error('문화강좌 신청 실패:', err);
+    errorEl.textContent = '접수 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.';
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '신청합니다';
+  }
+});
+</script>
+</body>
+</html>

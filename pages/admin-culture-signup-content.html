@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>문화강좌 내용 관리 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .cc-admin-section { margin-bottom: 28px; }
+  .cc-admin-section h2 { font-size: 15px; color: var(--navy); margin-bottom: 12px; }
+  .cc-admin-field { margin-bottom: 14px; }
+  .cc-admin-field label { display: block; font-size: 13px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
+  .cc-admin-field input, .cc-admin-field textarea {
+    width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1.5px solid var(--border-light); border-radius: 8px;
+    font-size: 14.5px; font-family: inherit;
+  }
+  .cc-admin-field input:focus, .cc-admin-field textarea:focus { outline: none; border-color: var(--navy); }
+  .cc-hint { font-size: 12.5px; color: #8a94a6; margin-top: -8px; margin-bottom: 14px; }
+  .cc-week-row {
+    display: grid; grid-template-columns: 56px 90px 1fr 90px 36px; gap: 8px; align-items: center; margin-bottom: 8px;
+  }
+  .cc-week-row input {
+    padding: 9px 10px; border: 1.5px solid var(--border-light); border-radius: 8px; font-size: 13.5px; font-family: inherit;
+  }
+  .cc-week-row input:focus { outline: none; border-color: var(--navy); }
+  .cc-week-remove { border: none; background: none; color: #b3261e; font-size: 18px; cursor: pointer; line-height: 1; padding: 4px; }
+  .cc-week-add { margin-top: 4px; }
+  .cc-admin-actions { display: flex; align-items: center; gap: 14px; margin-top: 24px; }
+  .cc-admin-msg { font-size: 13.5px; color: var(--text-gray); }
+  .cc-preview-link { font-size: 13px; }
+  @media (max-width: 480px) {
+    .cc-week-row { grid-template-columns: 1fr; gap: 4px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-light); }
+    .cc-week-remove { justify-self: end; }
+  }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">ADMIN</span>
+  <h1>문화강좌 내용 관리</h1>
+  <p>신청 페이지에 보이는 제목·일정·강사를 직접 수정합니다.</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:640px;">
+  <div id="adminGuard" class="admin-guard" hidden>
+    <p>관리자만 접근할 수 있는 페이지입니다.</p>
+    <p style="margin-top:8px;"><a href="/pages/login.html">로그인</a> 후 다시 시도해주세요.</p>
+  </div>
+
+  <div id="adminContent" hidden>
+    <div class="cc-admin-section">
+      <h2>제목 · 안내문구</h2>
+      <div class="cc-admin-field">
+        <label for="cc-a-badge">상단 배지</label>
+        <input type="text" id="cc-a-badge" placeholder="예: 2026 · 10월">
+      </div>
+      <div class="cc-admin-field">
+        <label for="cc-a-title">제목 (줄바꿈은 &lt;br&gt;로 입력)</label>
+        <input type="text" id="cc-a-title" placeholder="예: 부모 초청&lt;br&gt;문화강좌">
+      </div>
+      <div class="cc-admin-field">
+        <label for="cc-a-subtitle">부제목</label>
+        <input type="text" id="cc-a-subtitle" placeholder="예: 매주 토요일 오전 10시 30분 · 4주간">
+      </div>
+      <div class="cc-admin-field">
+        <label for="cc-a-time">시간 안내 배너</label>
+        <input type="text" id="cc-a-time" placeholder="예: 매주 토요일 오전 10시 30분">
+      </div>
+      <div class="cc-admin-field">
+        <label for="cc-a-closing">신청 완료 후 안내문구</label>
+        <input type="text" id="cc-a-closing" placeholder="예: 10월, 토요일마다 뵙겠습니다.">
+      </div>
+    </div>
+
+    <div class="cc-admin-section">
+      <h2>주차별 일정</h2>
+      <p class="cc-hint">주차 · 날짜 · 강좌명 · 강사 순서로 입력합니다.</p>
+      <div id="cc-a-weeks"></div>
+      <button type="button" class="btn btn-ghost btn-sm cc-week-add" id="cc-a-add-week">+ 주차 추가</button>
+    </div>
+
+    <div class="cc-admin-actions">
+      <button type="button" class="btn btn-primary" id="cc-a-save">저장</button>
+      <a class="cc-preview-link" href="/pages/culture-class-signup.html" target="_blank">신청 페이지 미리보기 ↗</a>
+      <span class="cc-admin-msg" id="cc-a-msg"></span>
+    </div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/settings-data.js"></script>
+<script src="/common.js"></script>
+<script>
+const CULTURE_CLASS_CONTENT_KEY = 'culture_class_signup_content';
+
+const CULTURE_CLASS_DEFAULT_CONTENT = {
+  badge: '2026 · 10월',
+  title: '부모 초청<br>문화강좌',
+  subtitle: '매주 토요일 오전 10시 30분 · 4주간',
+  timeLabel: '매주 토요일 오전 10시 30분',
+  closingNote: '10월, 토요일마다 뵙겠습니다.',
+  weeks: [
+    { week: '1주', date: '10/3(토)', topic: '핸드드립커피 1부', teacher: '박지환' },
+    { week: '2주', date: '10/10(토)', topic: '핸드드립커피 2부', teacher: '박지환' },
+    { week: '3주', date: '10/17(토)', topic: '케익 만들기', teacher: '이유리' },
+    { week: '4주', date: '10/24(토)', topic: '아로마 테라피', teacher: '김명선' },
+  ],
+};
+
+function addWeekRow(week) {
+  const row = document.createElement('div');
+  row.className = 'cc-week-row';
+  row.innerHTML = `
+    <input type="text" class="cc-w-week" placeholder="1주" value="${week ? week.week : ''}">
+    <input type="text" class="cc-w-date" placeholder="10/3(토)" value="${week ? week.date : ''}">
+    <input type="text" class="cc-w-topic" placeholder="강좌명" value="${week ? week.topic : ''}">
+    <input type="text" class="cc-w-teacher" placeholder="강사" value="${week ? week.teacher : ''}">
+    <button type="button" class="cc-week-remove" title="삭제">×</button>
+  `;
+  row.querySelector('.cc-week-remove').addEventListener('click', () => row.remove());
+  document.getElementById('cc-a-weeks').appendChild(row);
+}
+
+document.getElementById('cc-a-add-week').addEventListener('click', () => addWeekRow(null));
+
+function fillForm(content) {
+  document.getElementById('cc-a-badge').value = content.badge || '';
+  document.getElementById('cc-a-title').value = content.title || '';
+  document.getElementById('cc-a-subtitle').value = content.subtitle || '';
+  document.getElementById('cc-a-time').value = content.timeLabel || '';
+  document.getElementById('cc-a-closing').value = content.closingNote || '';
+  document.getElementById('cc-a-weeks').innerHTML = '';
+  (content.weeks || []).forEach(addWeekRow);
+}
+
+function collectForm() {
+  const weeks = Array.from(document.querySelectorAll('#cc-a-weeks .cc-week-row')).map(row => ({
+    week: row.querySelector('.cc-w-week').value.trim(),
+    date: row.querySelector('.cc-w-date').value.trim(),
+    topic: row.querySelector('.cc-w-topic').value.trim(),
+    teacher: row.querySelector('.cc-w-teacher').value.trim(),
+  })).filter(w => w.week || w.date || w.topic || w.teacher);
+
+  return {
+    badge: document.getElementById('cc-a-badge').value.trim(),
+    title: document.getElementById('cc-a-title').value.trim(),
+    subtitle: document.getElementById('cc-a-subtitle').value.trim(),
+    timeLabel: document.getElementById('cc-a-time').value.trim(),
+    closingNote: document.getElementById('cc-a-closing').value.trim(),
+    weeks,
+  };
+}
+
+document.getElementById('cc-a-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('cc-a-msg');
+  msgEl.style.color = 'var(--text-gray)';
+  msgEl.textContent = '저장 중...';
+  try {
+    const content = collectForm();
+    await upsertAppSetting(CULTURE_CLASS_CONTENT_KEY, JSON.stringify(content));
+    msgEl.textContent = '저장되었습니다.';
+  } catch (err) {
+    msgEl.style.color = '#b3261e';
+    msgEl.textContent = '저장 실패: ' + err.message;
+  }
+});
+
+async function initCultureContentAdminPage() {
+  const profile = await getCurrentProfile();
+  if (!profile || !profile.is_admin) {
+    document.getElementById('adminGuard').hidden = false;
+    return;
+  }
+  document.getElementById('adminContent').hidden = false;
+  try {
+    const raw = await fetchAppSetting(CULTURE_CLASS_CONTENT_KEY);
+    fillForm(raw ? JSON.parse(raw) : CULTURE_CLASS_DEFAULT_CONTENT);
+  } catch (err) {
+    console.error('문화강좌 내용 조회 실패(기본값 표시):', err);
+    fillForm(CULTURE_CLASS_DEFAULT_CONTENT);
+  }
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(initCultureContentAdminPage, 400));
+</script>
+</body>
+</html>
