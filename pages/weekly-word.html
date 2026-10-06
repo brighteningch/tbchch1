@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주간말씀 · 빛나는교회</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f3b64%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 text-anchor=%22middle%22 fill=%22white%22>%E2%9C%A6</text></svg>">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .ww-tabs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 28px; }
+  .ww-tab {
+    display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px;
+    border: 1px solid var(--border-light); background: #fff; color: var(--text-gray);
+    font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .ww-tab:hover { border-color: var(--navy); }
+  .ww-tab.is-active { background: var(--navy); border-color: var(--navy); color: #fff; }
+
+  .ww-panel {
+    background: linear-gradient(160deg, #12294a 0%, #0a1c33 100%);
+    border-radius: 20px; padding: 28px 20px; color: #fff;
+  }
+  .ww-panel-header { text-align: center; margin-bottom: 20px; }
+  .ww-panel-title { font-size: 18px; font-weight: 800; }
+  .ww-panel-sub { font-size: 13px; color: #b9c8db; margin-top: 4px; }
+  .ww-loading, .ww-empty { color: #b9c8db; padding: 60px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div id="headerHost"></div>
+
+<section class="page-hero">
+  <span class="page-badge">WEEKLY WORD</span>
+  <h1>주간말씀</h1>
+  <p>설교 인포그래픽 · 새벽기도 묵상 · 매일성경묵상 · 가정예배 순서지</p>
+  <div class="bar"></div>
+</section>
+
+<div class="page-body" style="max-width:720px;">
+  <div class="ww-tabs" id="wwTabs">
+    <button type="button" class="ww-tab is-active" data-category="infographic">🎨 설교 인포그래픽</button>
+    <button type="button" class="ww-tab" data-category="dawn-prayer">🌅 새벽기도 묵상</button>
+    <button type="button" class="ww-tab" data-category="daily">🙏 매일성경묵상</button>
+    <button type="button" class="ww-tab" data-category="family-worship">🤝 가정예배 순서지</button>
+  </div>
+
+  <div class="ww-panel">
+    <div class="ww-panel-header">
+      <p class="ww-panel-title" id="wwTitle">설교 인포그래픽</p>
+      <p class="ww-panel-sub" id="wwDate"></p>
+    </div>
+    <div class="devotion-image-wrap">
+      <img id="wwImage" alt="" hidden>
+      <div class="devotion-text-body" id="wwTextBody" hidden></div>
+      <p class="ww-empty" id="wwEmpty" hidden>아직 등록된 내용이 없습니다.</p>
+      <button type="button" class="btn btn-ghost btn-sm devotion-download-btn" id="wwDownloadBtn" hidden>⬇ 이미지 다운로드</button>
+    </div>
+    <div class="devotion-date-list" id="wwDateList"></div>
+  </div>
+</div>
+
+<div id="footerHost"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="/member-auth.js"></script>
+<script src="/weekly-content-data.js"></script>
+<script src="/common.js"></script>
+<script>
+const WW_LABELS = { infographic: '설교 인포그래픽', 'dawn-prayer': '새벽기도 묵상', daily: '매일성경묵상', 'family-worship': '가정예배 순서지' };
+let __wwItemsByCategory = {};
+let __wwCurrentCategory = 'infographic';
+let __wwCurrentIndex = 0;
+let __wwCurrentImage = null;
+
+// 로컬(한국시간) 기준 오늘 날짜 문자열 — index.html의 todayLocalDateStr()와 동일 로직.
+function wwTodayLocalDateStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+// 매일성경묵상은 한 주치를 미리 올려두는 경우가 있어 아직 오지 않은 날짜는 노출하지 않는다
+// (script.js의 visibleContentItems()와 동일 규칙).
+function wwVisibleItems(category) {
+  const items = __wwItemsByCategory[category] || [];
+  if (category !== 'daily') return items;
+  const todayStr = wwTodayLocalDateStr();
+  return items.filter(it => (it.period || '') <= todayStr);
+}
+
+function wwShowItem(index) {
+  const items = wwVisibleItems(__wwCurrentCategory);
+  const item = items[index];
+  const imageEl = document.getElementById('wwImage');
+  const textEl = document.getElementById('wwTextBody');
+  const emptyEl = document.getElementById('wwEmpty');
+  const downloadBtn = document.getElementById('wwDownloadBtn');
+  if (!item) {
+    imageEl.hidden = true;
+    textEl.hidden = true;
+    downloadBtn.hidden = true;
+    emptyEl.hidden = false;
+    document.getElementById('wwDate').textContent = '';
+    return;
+  }
+  emptyEl.hidden = true;
+  __wwCurrentIndex = index;
+  const imageUrl = (item.data && item.data.imageUrl) || '';
+  const bodyText = (item.data && item.data.body) || '';
+  if (imageUrl) {
+    imageEl.src = imageUrl;
+    imageEl.hidden = false;
+    textEl.hidden = true;
+    downloadBtn.hidden = false;
+  } else {
+    imageEl.hidden = true;
+    textEl.hidden = false;
+    textEl.textContent = bodyText;
+    downloadBtn.hidden = true;
+  }
+  document.getElementById('wwDate').textContent = item.period || '';
+  document.querySelectorAll('#wwDateList button').forEach((b, i) => b.classList.toggle('is-active', i === index));
+  const label = WW_LABELS[__wwCurrentCategory] || '이미지';
+  const lastSegment = imageUrl.split('?')[0].split('/').pop() || '';
+  const ext = lastSegment.includes('.') ? lastSegment.split('.').pop() : 'jpg';
+  __wwCurrentImage = imageUrl ? { url: imageUrl, filename: `${label}_${item.period || ''}.${ext}` } : null;
+}
+
+function wwRenderDateList() {
+  const items = wwVisibleItems(__wwCurrentCategory);
+  const wrap = document.getElementById('wwDateList');
+  wrap.innerHTML = items.map((it, i) => `<button type="button" data-index="${i}">${it.period || ''}</button>`).join('');
+}
+
+async function wwOpenCategory(category) {
+  __wwCurrentCategory = category;
+  document.getElementById('wwTitle').textContent = WW_LABELS[category] || '';
+  document.querySelectorAll('.ww-tab').forEach(t => t.classList.toggle('is-active', t.dataset.category === category));
+  document.getElementById('wwImage').hidden = true;
+  document.getElementById('wwTextBody').hidden = true;
+  document.getElementById('wwDownloadBtn').hidden = true;
+  document.getElementById('wwEmpty').hidden = true;
+  document.getElementById('wwDate').textContent = '불러오는 중...';
+  document.getElementById('wwDateList').innerHTML = '';
+
+  if (!__wwItemsByCategory[category]) {
+    try {
+      __wwItemsByCategory[category] = await fetchWeeklyContent(category);
+    } catch (err) {
+      console.error('주간말씀 조회 실패:', err);
+      __wwItemsByCategory[category] = [];
+    }
+  }
+  wwRenderDateList();
+  wwShowItem(0);
+}
+
+document.getElementById('wwTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.ww-tab');
+  if (!btn) return;
+  wwOpenCategory(btn.dataset.category);
+});
+
+document.getElementById('wwDateList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-index]');
+  if (!btn) return;
+  wwShowItem(Number(btn.dataset.index));
+});
+
+// Supabase Storage 이미지는 다른 도메인이라 <a download>가 그냥 안 먹는다(크로스오리진) —
+// script.js의 downloadCurrentDevotionImage()와 동일 패턴.
+document.getElementById('wwDownloadBtn').addEventListener('click', async () => {
+  if (!__wwCurrentImage) return;
+  const { url, filename } = __wwCurrentImage;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    window.open(url, '_blank');
+  }
+});
+
+wwOpenCategory('infographic');
+</script>
+</body>
+</html>
