@@ -32,16 +32,14 @@
 <section class="page-hero">
   <span class="page-badge">WEEKLY WORD</span>
   <h1>주간말씀</h1>
-  <p>설교 인포그래픽 · 새벽기도 묵상 · 매일성경묵상 · 가정예배 순서지</p>
+  <p>설교 인포그래픽 · 매일성경묵상</p>
   <div class="bar"></div>
 </section>
 
 <div class="page-body" style="max-width:720px;">
   <div class="ww-tabs" id="wwTabs">
     <button type="button" class="ww-tab is-active" data-category="infographic">🎨 설교 인포그래픽</button>
-    <button type="button" class="ww-tab" data-category="dawn-prayer">🌅 새벽기도 묵상</button>
     <button type="button" class="ww-tab" data-category="daily">🙏 매일성경묵상</button>
-    <button type="button" class="ww-tab" data-category="family-worship">🤝 가정예배 순서지</button>
   </div>
 
   <div class="ww-panel">
@@ -79,12 +77,15 @@ function wwTodayLocalDateStr() {
 }
 
 // 매일성경묵상은 한 주치를 미리 올려두는 경우가 있어 아직 오지 않은 날짜는 노출하지 않는다
-// (script.js의 visibleContentItems()와 동일 규칙).
+// (script.js의 visibleContentItems()와 동일 규칙). 또한 날짜 목록이 계속 쌓이지 않도록
+// 오늘을 포함해 최근 5일치만 보여준다 — fetchWeeklyContent가 이미 period 내림차순(최신순)
+// 으로 내려주므로, 미래 날짜를 제외한 뒤 앞에서 5개만 자르면 된다.
+const WW_DAILY_VISIBLE_DAYS = 5;
 function wwVisibleItems(category) {
   const items = __wwItemsByCategory[category] || [];
   if (category !== 'daily') return items;
   const todayStr = wwTodayLocalDateStr();
-  return items.filter(it => (it.period || '') <= todayStr);
+  return items.filter(it => (it.period || '') <= todayStr).slice(0, WW_DAILY_VISIBLE_DAYS);
 }
 
 function wwShowItem(index) {
